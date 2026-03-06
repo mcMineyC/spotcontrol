@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/badfortrains/spotcontrol/spclient"
+	"github.com/mcMineyC/spotcontrol/spclient"
 )
 
 // ---------------------------------------------------------------------------

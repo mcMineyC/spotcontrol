@@ -1615,7 +1615,7 @@ const file_spotify_authentication_proto_rawDesc = "" +
 	"\x06OS_BCO\x10\x16*(\n" +
 	"\vAccountType\x12\v\n" +
 	"\aSpotify\x10\x00\x12\f\n" +
-	"\bFacebook\x10\x01B3Z1github.com/badfortrains/spotcontrol/proto/spotify"
+	"\bFacebook\x10\x01B3Z1github.com/mcMineyC/spotcontrol/proto/spotify"
 
 var (
 	file_spotify_authentication_proto_rawDescOnce sync.Once

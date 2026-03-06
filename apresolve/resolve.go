@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	spotcontrol "github.com/badfortrains/spotcontrol"
+	spotcontrol "github.com/mcMineyC/spotcontrol"
 )
 
 type apResolveResponse struct {

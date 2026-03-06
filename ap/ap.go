@@ -19,9 +19,9 @@ import (
 	"golang.org/x/crypto/pbkdf2"
 	"google.golang.org/protobuf/proto"
 
-	spotcontrol "github.com/badfortrains/spotcontrol"
-	"github.com/badfortrains/spotcontrol/dh"
-	pb "github.com/badfortrains/spotcontrol/proto/spotify"
+	spotcontrol "github.com/mcMineyC/spotcontrol"
+	"github.com/mcMineyC/spotcontrol/dh"
+	pb "github.com/mcMineyC/spotcontrol/proto/spotify"
 )
 
 const pongAckInterval = 120 * time.Second

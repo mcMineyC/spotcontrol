@@ -195,7 +195,7 @@ const file_spotify_login5_v3_challenges_login5_challenges_code_proto_rawDesc = "
 	"\aUNKNOWN\x10\x00\x12\a\n" +
 	"\x03SMS\x10\x01\"\"\n" +
 	"\fCodeSolution\x12\x12\n" +
-	"\x04code\x18\x01 \x01(\tR\x04codeBHZFgithub.com/badfortrains/spotcontrol/proto/spotify/login5/v3/challengesb\x06proto3"
+	"\x04code\x18\x01 \x01(\tR\x04codeBHZFgithub.com/mcMineyC/spotcontrol/proto/spotify/login5/v3/challengesb\x06proto3"
 
 var (
 	file_spotify_login5_v3_challenges_login5_challenges_code_proto_rawDescOnce sync.Once

@@ -1,7 +1,7 @@
 version: v2
 modules:
   - path: .
-    name: buf.build/badfortrains/spotcontrol
+    name: buf.build/mcMineyC/spotcontrol
 deps:
   - buf.build/protocolbuffers/wellknowntypes
 lint:

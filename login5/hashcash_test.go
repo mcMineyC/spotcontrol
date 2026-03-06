@@ -4,7 +4,7 @@ import (
 	"crypto/sha1"
 	"testing"
 
-	challengespb "github.com/badfortrains/spotcontrol/proto/spotify/login5/v3/challenges"
+	challengespb "github.com/mcMineyC/spotcontrol/proto/spotify/login5/v3/challenges"
 )
 
 func TestCheckHashcash(t *testing.T) {

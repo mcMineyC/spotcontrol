@@ -1939,7 +1939,7 @@ const file_spotify_connectstate_player_proto_rawDesc = "" +
 	"HiFiStatus\x12\b\n" +
 	"\x04NONE\x10\x00\x12\a\n" +
 	"\x03OFF\x10\x01\x12\x06\n" +
-	"\x02ON\x10\x02B@Z>github.com/badfortrains/spotcontrol/proto/spotify/connectstateb\x06proto3"
+	"\x02ON\x10\x02B@Z>github.com/mcMineyC/spotcontrol/proto/spotify/connectstateb\x06proto3"
 
 var (
 	file_spotify_connectstate_player_proto_rawDescOnce sync.Once

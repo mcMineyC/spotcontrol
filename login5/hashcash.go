@@ -5,7 +5,7 @@ import (
 	"math/bits"
 	"time"
 
-	challengespb "github.com/badfortrains/spotcontrol/proto/spotify/login5/v3/challenges"
+	challengespb "github.com/mcMineyC/spotcontrol/proto/spotify/login5/v3/challenges"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
 

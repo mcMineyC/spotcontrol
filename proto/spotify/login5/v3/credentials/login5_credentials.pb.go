@@ -538,7 +538,7 @@ const file_spotify_login5_v3_credentials_login5_credentials_proto_rawDesc = "" +
 	"\x12token_endpoint_url\x18\x04 \x01(\tR\x10tokenEndpointUrl\"X\n" +
 	"\x16GoogleSignInCredential\x12\x1b\n" +
 	"\tauth_code\x18\x01 \x01(\tR\bauthCode\x12!\n" +
-	"\fredirect_uri\x18\x02 \x01(\tR\vredirectUriBIZGgithub.com/badfortrains/spotcontrol/proto/spotify/login5/v3/credentialsb\x06proto3"
+	"\fredirect_uri\x18\x02 \x01(\tR\vredirectUriBIZGgithub.com/mcMineyC/spotcontrol/proto/spotify/login5/v3/credentialsb\x06proto3"
 
 var (
 	file_spotify_login5_v3_credentials_login5_credentials_proto_rawDescOnce sync.Once

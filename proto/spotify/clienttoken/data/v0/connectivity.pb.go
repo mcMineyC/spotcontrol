@@ -753,7 +753,7 @@ const file_spotify_clienttoken_data_v0_connectivity_proto_rawDesc = "" +
 	"\x05width\x18\x01 \x01(\x05R\x05width\x12\x16\n" +
 	"\x06height\x18\x02 \x01(\x05R\x06height\x12\x18\n" +
 	"\adensity\x18\x03 \x01(\x05R\adensity\x12#\n" +
-	"\runknown_value\x18\x04 \x01(\x05R\funknownValueBGZEgithub.com/badfortrains/spotcontrol/proto/spotify/clienttoken/data/v0b\x06proto3"
+	"\runknown_value\x18\x04 \x01(\x05R\funknownValueBGZEgithub.com/mcMineyC/spotcontrol/proto/spotify/clienttoken/data/v0b\x06proto3"
 
 var (
 	file_spotify_clienttoken_data_v0_connectivity_proto_rawDescOnce sync.Once

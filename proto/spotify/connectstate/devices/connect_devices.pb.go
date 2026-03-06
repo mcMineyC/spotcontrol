@@ -639,7 +639,7 @@ const file_spotify_connectstate_devices_connect_devices_proto_rawDesc = "" +
 	"\tCAR_THING\x10e\x12\f\n" +
 	"\bOBSERVER\x10f\x12\x0e\n" +
 	"\n" +
-	"HOME_THING\x10gBHZFgithub.com/badfortrains/spotcontrol/proto/spotify/connectstate/devicesb\x06proto3"
+	"HOME_THING\x10gBHZFgithub.com/mcMineyC/spotcontrol/proto/spotify/connectstate/devicesb\x06proto3"
 
 var (
 	file_spotify_connectstate_devices_connect_devices_proto_rawDescOnce sync.Once

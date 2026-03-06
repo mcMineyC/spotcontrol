@@ -2,7 +2,7 @@ syntax = "proto2";
 
 package spotify;
 
-option go_package = "github.com/badfortrains/spotcontrol/proto/spotify";
+option go_package = "github.com/mcMineyC/spotcontrol/proto/spotify";
 
 import "spotify/keyexchange.proto";
 

@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/badfortrains/spotcontrol/spclient"
+	"github.com/mcMineyC/spotcontrol/spclient"
 )
 
 // ---------------------------------------------------------------------------

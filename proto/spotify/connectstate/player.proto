@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package spotify.connectstate;
 
-option go_package = "github.com/badfortrains/spotcontrol/proto/spotify/connectstate";
+option go_package = "github.com/mcMineyC/spotcontrol/proto/spotify/connectstate";
 
 message PlayerState {
   int64 timestamp = 1;

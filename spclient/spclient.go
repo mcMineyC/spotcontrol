@@ -18,8 +18,8 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"google.golang.org/protobuf/proto"
 
-	spotcontrol "github.com/badfortrains/spotcontrol"
-	connectpb "github.com/badfortrains/spotcontrol/proto/spotify/connectstate"
+	spotcontrol "github.com/mcMineyC/spotcontrol"
+	connectpb "github.com/mcMineyC/spotcontrol/proto/spotify/connectstate"
 )
 
 // ---------------------------------------------------------------------------

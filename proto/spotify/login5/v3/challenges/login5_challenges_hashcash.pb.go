@@ -136,7 +136,7 @@ const file_spotify_login5_v3_challenges_login5_challenges_hashcash_proto_rawDesc
 	"\x06length\x18\x02 \x01(\x05R\x06length\"a\n" +
 	"\x10HashcashSolution\x12\x16\n" +
 	"\x06suffix\x18\x01 \x01(\fR\x06suffix\x125\n" +
-	"\bduration\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\bdurationBHZFgithub.com/badfortrains/spotcontrol/proto/spotify/login5/v3/challengesb\x06proto3"
+	"\bduration\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\bdurationBHZFgithub.com/mcMineyC/spotcontrol/proto/spotify/login5/v3/challengesb\x06proto3"
 
 var (
 	file_spotify_login5_v3_challenges_login5_challenges_hashcash_proto_rawDescOnce sync.Once

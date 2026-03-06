@@ -18,7 +18,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/coder/websocket"
 
-	spotcontrol "github.com/badfortrains/spotcontrol"
+	spotcontrol "github.com/mcMineyC/spotcontrol"
 )
 
 const (

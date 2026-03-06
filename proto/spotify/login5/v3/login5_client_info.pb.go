@@ -81,7 +81,7 @@ const file_spotify_login5_v3_login5_client_info_proto_rawDesc = "" +
 	"\n" +
 	"ClientInfo\x12\x1b\n" +
 	"\tclient_id\x18\x01 \x01(\tR\bclientId\x12\x1b\n" +
-	"\tdevice_id\x18\x02 \x01(\tR\bdeviceIdB=Z;github.com/badfortrains/spotcontrol/proto/spotify/login5/v3b\x06proto3"
+	"\tdevice_id\x18\x02 \x01(\tR\bdeviceIdB=Z;github.com/mcMineyC/spotcontrol/proto/spotify/login5/v3b\x06proto3"
 
 var (
 	file_spotify_login5_v3_login5_client_info_proto_rawDescOnce sync.Once

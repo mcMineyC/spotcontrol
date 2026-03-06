@@ -3,9 +3,9 @@ package session
 import (
 	"net/http"
 
-	spotcontrol "github.com/badfortrains/spotcontrol"
-	"github.com/badfortrains/spotcontrol/apresolve"
-	devicespb "github.com/badfortrains/spotcontrol/proto/spotify/connectstate/devices"
+	spotcontrol "github.com/mcMineyC/spotcontrol"
+	"github.com/mcMineyC/spotcontrol/apresolve"
+	devicespb "github.com/mcMineyC/spotcontrol/proto/spotify/connectstate/devices"
 )
 
 // Options configures a new Session. At minimum, DeviceType, DeviceId, and

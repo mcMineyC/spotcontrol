@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	spotcontrol "github.com/badfortrains/spotcontrol"
-	pb "github.com/badfortrains/spotcontrol/proto/spotify/login5/v3"
-	credentialspb "github.com/badfortrains/spotcontrol/proto/spotify/login5/v3/credentials"
+	spotcontrol "github.com/mcMineyC/spotcontrol"
+	pb "github.com/mcMineyC/spotcontrol/proto/spotify/login5/v3"
+	credentialspb "github.com/mcMineyC/spotcontrol/proto/spotify/login5/v3/credentials"
 	"google.golang.org/protobuf/proto"
 )
 

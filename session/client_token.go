@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"net/url"
 
-	spotcontrol "github.com/badfortrains/spotcontrol"
-	pbdata "github.com/badfortrains/spotcontrol/proto/spotify/clienttoken/data/v0"
-	pbhttp "github.com/badfortrains/spotcontrol/proto/spotify/clienttoken/http/v0"
+	spotcontrol "github.com/mcMineyC/spotcontrol"
+	pbdata "github.com/mcMineyC/spotcontrol/proto/spotify/clienttoken/data/v0"
+	pbhttp "github.com/mcMineyC/spotcontrol/proto/spotify/clienttoken/http/v0"
 	"google.golang.org/protobuf/proto"
 )
 

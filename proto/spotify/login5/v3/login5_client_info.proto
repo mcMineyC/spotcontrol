@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package spotify.login5.v3;
 
-option go_package = "github.com/badfortrains/spotcontrol/proto/spotify/login5/v3";
+option go_package = "github.com/mcMineyC/spotcontrol/proto/spotify/login5/v3";
 
 message ClientInfo {
   string client_id = 1;

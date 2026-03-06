@@ -7,8 +7,8 @@
 package v3
 
 import (
-	challenges "github.com/badfortrains/spotcontrol/proto/spotify/login5/v3/challenges"
-	credentials "github.com/badfortrains/spotcontrol/proto/spotify/login5/v3/credentials"
+	challenges "github.com/mcMineyC/spotcontrol/proto/spotify/login5/v3/challenges"
+	credentials "github.com/mcMineyC/spotcontrol/proto/spotify/login5/v3/credentials"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -930,7 +930,7 @@ const file_spotify_login5_v3_login5_proto_rawDesc = "" +
 	"\x12UNKNOWN_IDENTIFIER\x10\x05\x12\x15\n" +
 	"\x11TOO_MANY_ATTEMPTS\x10\x06\x12\x17\n" +
 	"\x13INVALID_PHONENUMBER\x10\a\x12\x13\n" +
-	"\x0fTRY_AGAIN_LATER\x10\bB=Z;github.com/badfortrains/spotcontrol/proto/spotify/login5/v3b\x06proto3"
+	"\x0fTRY_AGAIN_LATER\x10\bB=Z;github.com/mcMineyC/spotcontrol/proto/spotify/login5/v3b\x06proto3"
 
 var (
 	file_spotify_login5_v3_login5_proto_rawDescOnce sync.Once

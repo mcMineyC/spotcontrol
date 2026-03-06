@@ -3,8 +3,8 @@ package spotcontrol
 import (
 	"runtime"
 
-	spotifypb "github.com/badfortrains/spotcontrol/proto/spotify"
-	clienttokenpb "github.com/badfortrains/spotcontrol/proto/spotify/clienttoken/data/v0"
+	spotifypb "github.com/mcMineyC/spotcontrol/proto/spotify"
+	clienttokenpb "github.com/mcMineyC/spotcontrol/proto/spotify/clienttoken/data/v0"
 )
 
 // GetOS returns the protobuf Os enum corresponding to the current operating system.

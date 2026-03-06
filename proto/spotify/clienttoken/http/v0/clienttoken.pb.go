@@ -7,7 +7,7 @@
 package v0
 
 import (
-	v0 "github.com/badfortrains/spotcontrol/proto/spotify/clienttoken/data/v0"
+	v0 "github.com/mcMineyC/spotcontrol/proto/spotify/clienttoken/data/v0"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -1184,7 +1184,7 @@ const file_spotify_clienttoken_http_v0_clienttoken_proto_rawDesc = "" +
 	"\x17ClientTokenResponseType\x12\x14\n" +
 	"\x10RESPONSE_UNKNOWN\x10\x00\x12#\n" +
 	"\x1fRESPONSE_GRANTED_TOKEN_RESPONSE\x10\x01\x12 \n" +
-	"\x1cRESPONSE_CHALLENGES_RESPONSE\x10\x02BGZEgithub.com/badfortrains/spotcontrol/proto/spotify/clienttoken/http/v0b\x06proto3"
+	"\x1cRESPONSE_CHALLENGES_RESPONSE\x10\x02BGZEgithub.com/mcMineyC/spotcontrol/proto/spotify/clienttoken/http/v0b\x06proto3"
 
 var (
 	file_spotify_clienttoken_http_v0_clienttoken_proto_rawDescOnce sync.Once

@@ -7,7 +7,7 @@
 package connectstate
 
 import (
-	devices "github.com/badfortrains/spotcontrol/proto/spotify/connectstate/devices"
+	devices "github.com/mcMineyC/spotcontrol/proto/spotify/connectstate/devices"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -2955,7 +2955,7 @@ const file_spotify_connectstate_connect_proto_rawDesc = "" +
 	"\x13NEW_DEVICE_APPEARED\x10\x03\x12\x19\n" +
 	"\x15DEVICE_VOLUME_CHANGED\x10\x04\x12\x18\n" +
 	"\x14DEVICE_ALIAS_CHANGED\x10\x05\x12\x19\n" +
-	"\x15DEVICE_NEW_CONNECTION\x10\x06B@Z>github.com/badfortrains/spotcontrol/proto/spotify/connectstateb\x06proto3"
+	"\x15DEVICE_NEW_CONNECTION\x10\x06B@Z>github.com/mcMineyC/spotcontrol/proto/spotify/connectstateb\x06proto3"
 
 var (
 	file_spotify_connectstate_connect_proto_rawDescOnce sync.Once

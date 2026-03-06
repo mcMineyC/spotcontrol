@@ -6,11 +6,11 @@ import (
 	"sync"
 	"time"
 
-	spotcontrol "github.com/badfortrains/spotcontrol"
-	"github.com/badfortrains/spotcontrol/dealer"
-	connectpb "github.com/badfortrains/spotcontrol/proto/spotify/connectstate"
-	devicespb "github.com/badfortrains/spotcontrol/proto/spotify/connectstate/devices"
-	"github.com/badfortrains/spotcontrol/spclient"
+	spotcontrol "github.com/mcMineyC/spotcontrol"
+	"github.com/mcMineyC/spotcontrol/dealer"
+	connectpb "github.com/mcMineyC/spotcontrol/proto/spotify/connectstate"
+	devicespb "github.com/mcMineyC/spotcontrol/proto/spotify/connectstate/devices"
+	"github.com/mcMineyC/spotcontrol/spclient"
 
 	"google.golang.org/protobuf/proto"
 )

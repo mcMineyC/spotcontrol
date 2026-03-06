@@ -8,9 +8,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	spotcontrol "github.com/badfortrains/spotcontrol"
-	"github.com/badfortrains/spotcontrol/ap"
-	pb "github.com/badfortrains/spotcontrol/proto/spotify"
+	spotcontrol "github.com/mcMineyC/spotcontrol"
+	"github.com/mcMineyC/spotcontrol/ap"
+	pb "github.com/mcMineyC/spotcontrol/proto/spotify"
 	"google.golang.org/protobuf/proto"
 )
 

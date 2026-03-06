@@ -14,10 +14,10 @@ import (
 	"strings"
 	"syscall"
 
-	spotcontrol "github.com/badfortrains/spotcontrol"
-	"github.com/badfortrains/spotcontrol/controller"
-	devicespb "github.com/badfortrains/spotcontrol/proto/spotify/connectstate/devices"
-	"github.com/badfortrains/spotcontrol/session"
+	spotcontrol "github.com/mcMineyC/spotcontrol"
+	"github.com/mcMineyC/spotcontrol/controller"
+	devicespb "github.com/mcMineyC/spotcontrol/proto/spotify/connectstate/devices"
+	"github.com/mcMineyC/spotcontrol/session"
 )
 
 const (

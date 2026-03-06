@@ -2190,7 +2190,7 @@ const file_spotify_keyexchange_proto_rawDesc = "" +
 	"\rAccountExists\x10\x0e\x12\x1d\n" +
 	"\x19ExtraVerificationRequired\x10\x0f\x12\x11\n" +
 	"\rInvalidAppKey\x10\x10\x12\x15\n" +
-	"\x11ApplicationBanned\x10\x11B3Z1github.com/badfortrains/spotcontrol/proto/spotify"
+	"\x11ApplicationBanned\x10\x11B3Z1github.com/mcMineyC/spotcontrol/proto/spotify"
 
 var (
 	file_spotify_keyexchange_proto_rawDescOnce sync.Once

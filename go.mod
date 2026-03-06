@@ -1,4 +1,4 @@
-module github.com/badfortrains/spotcontrol
+module github.com/mcMineyC/spotcontrol
 
 go 1.23
 

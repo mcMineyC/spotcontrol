@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package spotify.login5.v3;
 
-option go_package = "github.com/badfortrains/spotcontrol/proto/spotify/login5/v3";
+option go_package = "github.com/mcMineyC/spotcontrol/proto/spotify/login5/v3";
 
 import "spotify/login5/v3/login5_client_info.proto";
 import "spotify/login5/v3/credentials/login5_credentials.proto";

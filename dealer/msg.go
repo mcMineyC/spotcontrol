@@ -1,7 +1,7 @@
 package dealer
 
 import (
-	connectpb "github.com/badfortrains/spotcontrol/proto/spotify/connectstate"
+	connectpb "github.com/mcMineyC/spotcontrol/proto/spotify/connectstate"
 )
 
 // RawMessage is the JSON-framed message received over the dealer WebSocket.

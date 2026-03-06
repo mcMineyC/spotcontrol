@@ -6,7 +6,7 @@ import (
 	"net"
 	"net/http"
 
-	spotcontrol "github.com/badfortrains/spotcontrol"
+	spotcontrol "github.com/mcMineyC/spotcontrol"
 )
 
 // NewOAuth2Server starts a local HTTP server that listens for the OAuth2

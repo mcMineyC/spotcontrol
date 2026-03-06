@@ -41,7 +41,7 @@ This is a modernized rewrite based on the protocol details from [go-librespot](h
 ## Installation
 
 ```
-go get github.com/badfortrains/spotcontrol
+go get github.com/mcMineyC/spotcontrol
 ```
 
 ### Protobuf Code Generation
@@ -75,9 +75,9 @@ import (
     "fmt"
     "log"
 
-    "github.com/badfortrains/spotcontrol/controller"
-    devicespb "github.com/badfortrains/spotcontrol/proto/spotify/connectstate/devices"
-    "github.com/badfortrains/spotcontrol/session"
+    "github.com/mcMineyC/spotcontrol/controller"
+    devicespb "github.com/mcMineyC/spotcontrol/proto/spotify/connectstate/devices"
+    "github.com/mcMineyC/spotcontrol/session"
 )
 
 func main() {
@@ -219,3 +219,6 @@ go test ./...
 ## License
 
 See [LICENSE](LICENSE).
+
+## DISCLAIMER
+Much of this code was written with te use of Claude Opus 4.6
