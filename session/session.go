@@ -11,6 +11,7 @@ import (
 	spotcontrol "github.com/mcMineyC/spotcontrol"
 	"github.com/mcMineyC/spotcontrol/ap"
 	"github.com/mcMineyC/spotcontrol/apresolve"
+	"github.com/mcMineyC/spotcontrol/controller"
 	"github.com/mcMineyC/spotcontrol/dealer"
 	"github.com/mcMineyC/spotcontrol/login5"
 	"github.com/mcMineyC/spotcontrol/mercury"
@@ -79,11 +80,16 @@ func NewSessionFromOptions(ctx context.Context, opts *Options) (*Session, error)
 		return nil, fmt.Errorf("missing device type")
 	}
 
-	// Validate device ID (must be a 20-byte hex string = 40 hex chars).
-	if deviceIdBytes, err := hex.DecodeString(opts.DeviceId); err != nil {
-		return nil, fmt.Errorf("invalid device id (not valid hex): %w", err)
-	} else if len(deviceIdBytes) != 20 {
-		return nil, fmt.Errorf("invalid device id length: expected 40 hex chars (20 bytes), got %d hex chars", len(opts.DeviceId))
+	// Auto-generate device ID if empty; validate if provided.
+	if opts.DeviceId == "" {
+		opts.DeviceId = spotcontrol.GenerateDeviceId()
+		log.Debugf("auto-generated device id: %s", opts.DeviceId)
+	} else {
+		if deviceIdBytes, err := hex.DecodeString(opts.DeviceId); err != nil {
+			return nil, fmt.Errorf("invalid device id (not valid hex): %w", err)
+		} else if len(deviceIdBytes) != 20 {
+			return nil, fmt.Errorf("invalid device id length: expected 40 hex chars (20 bytes), got %d hex chars", len(opts.DeviceId))
+		}
 	}
 
 	s := &Session{
@@ -446,4 +452,49 @@ func (s *Session) OAuthToken() *oauth2.Token {
 	s.oauthLock.RLock()
 	defer s.oauthLock.RUnlock()
 	return s.oauthToken
+}
+
+// ExportState builds an AppState from the session's current internal state,
+// capturing everything needed to restore the session later (device ID,
+// username, stored credentials, and OAuth2 token). The returned value can be
+// passed to spotcontrol.SaveState for persistence.
+func (s *Session) ExportState() *spotcontrol.AppState {
+	state := &spotcontrol.AppState{
+		DeviceId:          s.deviceId,
+		Username:          s.ap.Username(),
+		StoredCredentials: s.ap.StoredCredentials(),
+	}
+
+	s.oauthLock.RLock()
+	tok := s.oauthToken
+	s.oauthLock.RUnlock()
+
+	if tok != nil {
+		state.OAuthAccessToken = tok.AccessToken
+		state.OAuthRefreshToken = tok.RefreshToken
+		state.OAuthTokenType = tok.TokenType
+		state.OAuthExpiry = tok.Expiry
+	}
+
+	return state
+}
+
+// NewController creates a controller.Controller pre-configured with this
+// session's spclient, dealer, device info, and logger. The controller is
+// returned in a stopped state — call Controller.Start(ctx) to connect the
+// dealer and begin receiving cluster updates.
+//
+// This is a convenience method that eliminates the need to manually construct
+// a controller.Config from session fields. For advanced use cases (e.g.
+// providing a custom spclient or dealer), use controller.NewController
+// directly.
+func (s *Session) NewController() *controller.Controller {
+	return controller.NewController(controller.Config{
+		Log:        s.log,
+		Spclient:   s.sp,
+		Dealer:     s.dealer,
+		DeviceId:   s.deviceId,
+		DeviceName: s.deviceName,
+		DeviceType: s.deviceType,
+	})
 }

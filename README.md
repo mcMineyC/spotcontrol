@@ -16,6 +16,7 @@ This is a modernized rewrite based on the protocol details from [go-librespot](h
 - **Controller** — High-level API for listing devices, play/pause/next/previous, volume, seek, shuffle, repeat, track loading, playback transfer, and queue management
 - **Multiple Auth Methods** — Stored credentials, OAuth2 PKCE interactive login, Spotify tokens, and encrypted discovery blobs
 - **Session Orchestration** — Single `Session` object wires together all components with a clean lifecycle
+- **Convenience Helpers** — `quick.Connect()` one-liner, automatic device ID generation, JSON state persistence, built-in loggers
 
 ## Architecture
 
@@ -51,8 +52,10 @@ The repository includes `.proto` source files under `proto/spotify/` and pre-gen
 1. Install [buf](https://buf.build/docs/installation) and the Go protobuf plugin:
 
    ```sh
-   go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+   go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.34.2
    ```
+
+   > **Note:** Use `protoc-gen-go` v1.34.x to generate files with `var rawDesc = []byte{...}` literals. Newer versions (v1.36+) generate `const rawDesc string` with `unsafe.StringData`, which can cause panics with some Go toolchain versions.
 
 2. Generate from the `proto/` directory:
 
@@ -65,7 +68,9 @@ The repository includes `.proto` source files under `proto/spotify/` and pre-gen
 
 ## Quick Start
 
-### Interactive OAuth2 Login
+### One-liner with `quick.Connect()`
+
+The simplest way to get started — handles session creation, authentication, state persistence, and controller setup in a single call:
 
 ```go
 package main
@@ -75,20 +80,66 @@ import (
     "fmt"
     "log"
 
+    "github.com/mcMineyC/spotcontrol/quick"
+)
+
+func main() {
+    ctx := context.Background()
+
+    // Connect handles everything: load/save state, authenticate,
+    // create session + controller, start the dealer.
+    result, err := quick.Connect(ctx, quick.QuickConfig{
+        StatePath:   "spotcontrol_state.json", // persists device ID, credentials, OAuth2 tokens
+        DeviceName:  "MyApp",
+        Interactive: true, // OAuth2 PKCE login if no stored credentials
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer result.Close()
+
+    fmt.Printf("Connected as: %s\n", result.Session.Username())
+
+    // List devices.
+    devices := result.ListDevices()
+    for _, d := range devices {
+        fmt.Printf("Device: %s (%s) active=%v\n", d.Name, d.Type, d.IsActive)
+    }
+
+    // Play a track on the active device.
+    if err := result.Play(ctx, ""); err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+On the first run, `quick.Connect()` opens an OAuth2 PKCE flow (prints a URL for the user to visit). Credentials are automatically saved to `spotcontrol_state.json`, so subsequent runs authenticate silently.
+
+### Advanced: Manual Session + Controller
+
+For full control over session configuration, use `session.NewSessionFromOptions` and `controller.NewController` directly:
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+
+    spotcontrol "github.com/mcMineyC/spotcontrol"
     "github.com/mcMineyC/spotcontrol/controller"
-    devicespb "github.com/mcMineyC/spotcontrol/proto/spotify/connectstate/devices"
     "github.com/mcMineyC/spotcontrol/session"
 )
 
 func main() {
     ctx := context.Background()
 
-    // Create a session with interactive OAuth2 PKCE login.
-    // This opens a browser for the user to authenticate.
     sess, err := session.NewSessionFromOptions(ctx, &session.Options{
-        DeviceType: devicespb.DeviceType_COMPUTER,
-        DeviceId:   "your-40-hex-char-device-id-here000000000",
+        Log:        spotcontrol.NewSimpleLogger(nil), // or NewSlogLogger, or your own Logger
+        DeviceType: spotcontrol.DeviceTypeComputer,    // re-exported from protobuf for convenience
         DeviceName: "MyApp",
+        // DeviceId is auto-generated if empty.
         Credentials: session.InteractiveCredentials{
             CallbackPort: 0, // random port
         },
@@ -99,17 +150,13 @@ func main() {
     defer sess.Close()
 
     // Save credentials for next time.
-    fmt.Printf("Username: %s\n", sess.Username())
-    fmt.Printf("Stored credentials (save these): %x\n", sess.StoredCredentials())
+    state := sess.ExportState()
+    if err := spotcontrol.SaveState("state.json", state); err != nil {
+        log.Printf("warning: failed saving state: %v", err)
+    }
 
-    // Create a controller for device management.
-    ctrl := controller.NewController(controller.Config{
-        Spclient:   sess.Spclient(),
-        Dealer:     sess.Dealer(),
-        DeviceId:   sess.DeviceId(),
-        DeviceName: "MyApp",
-        DeviceType: devicespb.DeviceType_COMPUTER,
-    })
+    // Create and start the controller.
+    ctrl := sess.NewController() // convenience method, or use controller.NewController(cfg)
     defer ctrl.Close()
 
     if err := ctrl.Start(ctx); err != nil {
@@ -122,10 +169,10 @@ func main() {
         log.Fatal(err)
     }
     for _, d := range devices {
-        fmt.Printf("Device: %s (%s) active=%v\n", d.Name, d.Type, d.IsActive)
+        fmt.Printf("Device: %s (%s) active=%v vol=%d%%\n", d.Name, d.Type, d.IsActive, d.Volume)
     }
 
-    // Play a track on the active device.
+    // Play a track.
     err = ctrl.LoadTrack(ctx, []string{"spotify:track:6rqhFgbbKwnb9MLmUQDhG6"}, nil)
     if err != nil {
         log.Fatal(err)
@@ -136,16 +183,40 @@ func main() {
 ### Using Stored Credentials
 
 ```go
+// Load previously saved state.
+state, _ := spotcontrol.LoadState("state.json")
+
 sess, err := session.NewSessionFromOptions(ctx, &session.Options{
-    DeviceType: devicespb.DeviceType_COMPUTER,
-    DeviceId:   "your-40-hex-char-device-id-here000000000",
+    DeviceType: spotcontrol.DeviceTypeComputer,
+    DeviceId:   state.DeviceId,
     DeviceName: "MyApp",
     Credentials: session.StoredCredentials{
-        Username: savedUsername,
-        Data:     savedCredentialBytes,
+        Username: state.Username,
+        Data:     state.StoredCredentials,
     },
+    AppState: state, // restores OAuth2 token for Web API access
 })
 ```
+
+## Convenience Helpers
+
+The root `spotcontrol` package provides several helpers to reduce boilerplate:
+
+| Helper | Description |
+|--------|-------------|
+| `GenerateDeviceId()` | Generates a random 40-hex-char device ID (crypto/rand) |
+| `LoadState(path)` | Loads `AppState` from JSON; returns `(nil, nil)` if file doesn't exist |
+| `SaveState(path, state)` | Saves `AppState` as JSON with `0600` permissions |
+| `NewSimpleLogger(w)` | Ready-made `Logger` that writes to an `io.Writer` (suppresses Trace) |
+| `NewSlogLogger(l)` | Adapts `*slog.Logger` to the `Logger` interface |
+| `DeviceTypeComputer`, etc. | Re-exported device type constants (no protobuf import needed) |
+
+The `session.Session` type also provides:
+
+| Method | Description |
+|--------|-------------|
+| `ExportState()` | Builds an `AppState` from the session (device ID, username, credentials, OAuth2 token) |
+| `NewController()` | Creates a `controller.Controller` pre-configured from the session |
 
 ## Example CLI
 
@@ -187,15 +258,16 @@ Available commands in the CLI:
 
 | Package | Description |
 |---------|-------------|
-| `spotcontrol` | Root package with shared types (`Logger`, `AppState`, `GetAddressFunc`), ID utilities, platform detection, version info |
+| `spotcontrol` | Root package with shared types (`Logger`, `AppState`, `GetAddressFunc`), convenience helpers (`GenerateDeviceId`, `LoadState`/`SaveState`, `NewSimpleLogger`/`NewSlogLogger`), ID utilities, platform detection, version info |
+| `quick` | High-level convenience constructor — `quick.Connect()` wires together state persistence, authentication, session, and controller in one call |
+| `session` | Session orchestrator — wires AP, Login5, spclient, dealer, and Mercury together; handles OAuth2 PKCE flow; provides `ExportState()` and `NewController()` |
+| `controller` | High-level playback control API — device listing, play/pause/skip, volume, shuffle, repeat, track loading, transfer, queue |
 | `ap` | Access point TCP connection — DH key exchange, Shannon encryption, packet framing, ping/pong, reconnection |
 | `apresolve` | Service endpoint resolver (`apresolve.spotify.com`) for AP, dealer, and spclient addresses |
-| `controller` | High-level playback control API — device listing, play/pause/skip, volume, shuffle, repeat, track loading, transfer |
 | `dealer` | Dealer WebSocket client — real-time push messages, cluster updates, request/reply protocol |
 | `dh` | Diffie-Hellman key exchange using Spotify's 768-bit MODP group |
 | `login5` | Login5 authentication client with hashcash challenge solver and automatic token renewal |
 | `mercury` | Mercury (Hermes) pub/sub messaging over AP packets |
-| `session` | Session orchestrator — wires AP, Login5, spclient, dealer, and Mercury together; handles OAuth2 PKCE flow |
 | `spclient` | HTTP client for Spotify's spclient API — Connect State PUT, Web API proxy, automatic auth token injection |
 | `proto/` | Protobuf definitions and generated Go code for all Spotify protocol messages |
 
@@ -221,4 +293,4 @@ go test ./...
 See [LICENSE](LICENSE).
 
 ## DISCLAIMER
-Much of this code was written with te use of Claude Opus 4.6
+Much of this code was written with the use of Claude Opus 4.6

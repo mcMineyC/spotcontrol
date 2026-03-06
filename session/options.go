@@ -8,8 +8,16 @@ import (
 	devicespb "github.com/mcMineyC/spotcontrol/proto/spotify/connectstate/devices"
 )
 
-// Options configures a new Session. At minimum, DeviceType, DeviceId, and
-// Credentials must be provided.
+// Credentials is a marker interface satisfied by the four supported credential
+// types: StoredCredentials, SpotifyTokenCredentials, BlobCredentials, and
+// InteractiveCredentials. Using a concrete interface instead of `any` prevents
+// accidentally passing an unsupported type (which would only fail at runtime).
+type Credentials interface {
+	isCredentials()
+}
+
+// Options configures a new Session. At minimum, DeviceType and Credentials
+// must be provided. If DeviceId is empty, one is auto-generated.
 type Options struct {
 	// Log is the base logger to use. If nil, a NullLogger is used.
 	Log spotcontrol.Logger
@@ -18,7 +26,12 @@ type Options struct {
 	// COMPUTER, SPEAKER). Required.
 	DeviceType devicespb.DeviceType
 
-	// DeviceId is the hex-encoded 20-byte Spotify device identifier. Required.
+	// DeviceId is the hex-encoded 20-byte Spotify device identifier. If empty,
+	// a random ID is generated automatically and can be retrieved later via
+	// Session.DeviceId(). If non-empty, it must be exactly 40 hex characters.
+	//
+	// Users can pass spotcontrol.DeviceTypeComputer (or any other constant from
+	// the spotcontrol package) instead of importing the protobuf package directly.
 	DeviceId string
 
 	// DeviceName is the human-readable name shown in Spotify Connect device
@@ -30,7 +43,7 @@ type Options struct {
 	//   - SpotifyTokenCredentials
 	//   - BlobCredentials
 	//   - InteractiveCredentials
-	Credentials any
+	Credentials Credentials
 
 	// ClientToken is an existing Spotify client token. If empty, a new one is
 	// retrieved automatically from https://clienttoken.spotify.com/v1/clienttoken.
@@ -60,6 +73,8 @@ type StoredCredentials struct {
 	Data     []byte
 }
 
+func (StoredCredentials) isCredentials() {}
+
 // SpotifyTokenCredentials authenticates using a username and an OAuth/Spotify
 // access token (e.g. from an interactive OAuth2 PKCE flow).
 type SpotifyTokenCredentials struct {
@@ -67,12 +82,16 @@ type SpotifyTokenCredentials struct {
 	Token    string
 }
 
+func (SpotifyTokenCredentials) isCredentials() {}
+
 // BlobCredentials authenticates using an encrypted discovery blob (base64-encoded)
 // obtained via Spotify Connect zeroconf discovery.
 type BlobCredentials struct {
 	Username string
 	Blob     []byte
 }
+
+func (BlobCredentials) isCredentials() {}
 
 // InteractiveCredentials triggers an OAuth2 PKCE interactive login flow. A
 // local HTTP server is started on CallbackPort (or a random port if 0) to
@@ -83,3 +102,5 @@ type InteractiveCredentials struct {
 	// a random available port.
 	CallbackPort int
 }
+
+func (InteractiveCredentials) isCredentials() {}

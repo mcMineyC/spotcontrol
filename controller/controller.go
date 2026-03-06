@@ -25,7 +25,8 @@ type DeviceInfo struct {
 	Type string
 	// IsActive is true if this device is the currently active playback device.
 	IsActive bool
-	// Volume is the device volume (0-65535 for connect state, 0-100 for Web API).
+	// Volume is the device volume as a percentage (0-100). Connect-state values
+	// are automatically normalized from the internal 0-65535 range.
 	Volume int
 	// SupportsVolume is true if the device supports volume control.
 	SupportsVolume bool

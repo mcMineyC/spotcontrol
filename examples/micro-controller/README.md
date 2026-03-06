@@ -27,10 +27,10 @@ Once credentials are saved, just run without any flags:
 ./micro-controller
 ```
 
-### Custom Credentials File
+### Custom State File
 
 ```sh
-./micro-controller --credentials /path/to/state.json
+./micro-controller --state /path/to/state.json
 ```
 
 ### Flags
@@ -38,10 +38,9 @@ Once credentials are saved, just run without any flags:
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--interactive` | `false` | Use interactive OAuth2 PKCE login flow |
-| `--credentials` | `""` | Path to stored credentials JSON file |
+| `--state` | `spotcontrol_state.json` | Path to state file (device ID, credentials, OAuth2 tokens) |
 | `--devicename` | `SpotControl` | Name shown in Spotify Connect device lists |
 | `--port` | `0` | OAuth2 callback port (0 = random available port) |
-| `--username` | `""` | Spotify username (legacy, not supported for password login) |
 
 ## Commands
 

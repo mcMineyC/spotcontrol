@@ -31,7 +31,7 @@ func (c *Controller) ListDevices() []DeviceInfo {
 			Name:           info.GetName(),
 			Type:           info.GetDeviceType().String(),
 			IsActive:       id == activeId,
-			Volume:         int(info.GetVolume()),
+			Volume:         int(info.GetVolume()) * 100 / 65535,
 			SupportsVolume: info.GetCapabilities() != nil && !info.GetCapabilities().GetDisableVolume(),
 		}
 		devices = append(devices, di)
