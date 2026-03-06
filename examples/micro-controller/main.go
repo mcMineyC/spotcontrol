@@ -236,6 +236,7 @@ func main() {
 		DeviceId:    deviceId,
 		DeviceName:  *deviceName,
 		Credentials: creds,
+		AppState:    state,
 	})
 	if err != nil {
 		fmt.Printf("Error creating session: %v\n", err)
@@ -252,6 +253,14 @@ func main() {
 		DeviceId:          deviceId,
 		Username:          sess.Username(),
 		StoredCredentials: sess.StoredCredentials(),
+	}
+	// Persist the OAuth2 token so Web API commands work on subsequent runs
+	// without requiring a new interactive login.
+	if oauthTok := sess.OAuthToken(); oauthTok != nil {
+		newState.OAuthAccessToken = oauthTok.AccessToken
+		newState.OAuthRefreshToken = oauthTok.RefreshToken
+		newState.OAuthTokenType = oauthTok.TokenType
+		newState.OAuthExpiry = oauthTok.Expiry
 	}
 	if err := saveState(savePath, newState); err != nil {
 		log.Warnf("failed saving state: %v", err)

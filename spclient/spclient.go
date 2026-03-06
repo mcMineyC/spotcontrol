@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -32,6 +33,17 @@ type Spclient struct {
 	deviceId    string
 
 	accessToken spotcontrol.GetLogin5TokenFunc
+
+	// warnedNoWebApiToken ensures the missing-OAuth2-token warning is logged
+	// only once rather than on every Web API request.
+	warnedNoWebApiToken sync.Once
+
+	// webApiToken is an optional token function for Spotify Web API requests
+	// (api.spotify.com). The Login5 token used by accessToken only works for
+	// spclient endpoints; the Web API requires an OAuth2 token obtained via
+	// the Authorization Code / PKCE flow with the appropriate scopes. When
+	// set, WebApiRequest uses this instead of accessToken.
+	webApiToken spotcontrol.GetLogin5TokenFunc
 }
 
 // NewSpclient creates a new Spclient. The addr function is called once to
@@ -66,6 +78,13 @@ func NewSpclient(
 		deviceId:    deviceId,
 		accessToken: accessToken,
 	}, nil
+}
+
+// SetWebApiTokenFunc sets the token function used for Spotify Web API requests
+// (api.spotify.com). If not set, WebApiRequest falls back to the Login5 token,
+// which may lack the scopes required by Web API endpoints.
+func (c *Spclient) SetWebApiTokenFunc(fn spotcontrol.GetLogin5TokenFunc) {
+	c.webApiToken = fn
 }
 
 // retryAfterDuration parses the Retry-After header from an HTTP response. It
@@ -112,6 +131,23 @@ func (c *Spclient) innerRequest(
 	header http.Header,
 	body []byte,
 ) (*http.Response, error) {
+	return c.innerRequestWithToken(ctx, method, reqUrl, query, header, body, c.accessToken)
+}
+
+// innerRequestWithToken is the shared implementation for both spclient and Web
+// API requests. It injects the client token and bearer token (from the given
+// tokenFunc), handles 401 retries (by forcing a new access token), retries
+// 502 responses, and respects 429 rate-limit responses with Retry-After
+// back-off.
+func (c *Spclient) innerRequestWithToken(
+	ctx context.Context,
+	method string,
+	reqUrl *url.URL,
+	query url.Values,
+	header http.Header,
+	body []byte,
+	tokenFunc spotcontrol.GetLogin5TokenFunc,
+) (*http.Response, error) {
 	if query != nil {
 		reqUrl.RawQuery = query.Encode()
 	}
@@ -151,7 +187,7 @@ func (c *Spclient) innerRequest(
 	bo.MaxElapsedTime = 90 * time.Second
 
 	resp, err := backoff.RetryWithData(func() (*http.Response, error) {
-		accessToken, err := c.accessToken(ctx, forceNewToken)
+		accessToken, err := tokenFunc(ctx, forceNewToken)
 		if err != nil {
 			return nil, backoff.Permanent(fmt.Errorf("failed obtaining spclient access token: %w", err))
 		}
@@ -241,7 +277,18 @@ func (c *Spclient) WebApiRequest(
 		panic("invalid api base url")
 	}
 	reqURL := reqPath.JoinPath(path)
-	return c.innerRequest(ctx, method, reqURL, query, header, body)
+
+	// Use the OAuth2 Web API token if available; otherwise fall back to
+	// the Login5 token (which may not have the right scopes).
+	tokenFunc := c.accessToken
+	if c.webApiToken != nil {
+		tokenFunc = c.webApiToken
+	} else {
+		c.warnedNoWebApiToken.Do(func() {
+			c.log.Warnf("no OAuth2 Web API token configured; falling back to Login5 token for api.spotify.com requests (this may fail — run with --interactive to obtain a proper OAuth2 token)")
+		})
+	}
+	return c.innerRequestWithToken(ctx, method, reqURL, query, header, body, tokenFunc)
 }
 
 // GetAccessToken returns an access token, optionally forcing a new one.
@@ -285,13 +332,17 @@ func (c *Spclient) PutConnectStateInactive(ctx context.Context, spotConnId strin
 // PutConnectState sends a PutStateRequest to register or update this device's
 // connect state. The spotConnId is the X-Spotify-Connection-Id obtained from
 // the dealer WebSocket connection.
-func (c *Spclient) PutConnectState(ctx context.Context, spotConnId string, reqProto *connectpb.PutStateRequest) error {
+//
+// On success it returns the raw response body, which is a serialized Cluster
+// protobuf that the caller can unmarshal to obtain the initial cluster state
+// (including all visible devices and the active device).
+func (c *Spclient) PutConnectState(ctx context.Context, spotConnId string, reqProto *connectpb.PutStateRequest) ([]byte, error) {
 	reqBody, err := proto.Marshal(reqProto)
 	if err != nil {
-		return fmt.Errorf("failed marshalling PutStateRequest: %w", err)
+		return nil, fmt.Errorf("failed marshalling PutStateRequest: %w", err)
 	}
 
-	_, err = backoff.RetryWithData(func() (*http.Response, error) {
+	respBody, err := backoff.RetryWithData(func() ([]byte, error) {
 		resp, err := c.Request(
 			ctx,
 			"PUT",
@@ -308,21 +359,26 @@ func (c *Spclient) PutConnectState(ctx context.Context, spotConnId string, reqPr
 		}
 		defer func() { _ = resp.Body.Close() }()
 
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return nil, fmt.Errorf("failed reading response body: %w", readErr)
+		}
+
 		if resp.StatusCode != 200 {
 			var putError putStateError
-			if decErr := json.NewDecoder(resp.Body).Decode(&putError); decErr != nil {
+			if decErr := json.Unmarshal(body, &putError); decErr != nil {
 				c.log.Debugf("failed reading error response: %s", decErr)
-				return nil, fmt.Errorf("failed reading error response: %w", decErr)
+				return nil, fmt.Errorf("put state request failed with status %d (unreadable body)", resp.StatusCode)
 			}
 			c.log.Debugf("put state request failed with status %d: %s", resp.StatusCode, putError.Message)
 			return nil, fmt.Errorf("put state request failed with status %d: %s", resp.StatusCode, putError.Message)
 		}
 
 		c.log.Debugf("put connect state because %s", reqProto.PutStateReason)
-		return resp, nil
+		return body, nil
 	}, backoff.WithContext(backoff.WithMaxRetries(backoff.NewConstantBackOff(1*time.Second), 2), ctx))
 
-	return err
+	return respBody, err
 }
 
 // DeviceId returns the device ID this Spclient was created with.

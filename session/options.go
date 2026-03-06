@@ -44,6 +44,12 @@ type Options struct {
 	// apresolve, client token, etc.). If nil, a default client with a 30-second
 	// timeout is created.
 	Client *http.Client
+
+	// AppState is the persisted application state from a previous session. If
+	// provided and it contains an OAuth2 token, that token will be restored so
+	// that Web API requests (api.spotify.com) work without requiring a new
+	// interactive login. May be nil.
+	AppState *spotcontrol.AppState
 }
 
 // StoredCredentials authenticates using a username and stored credential bytes

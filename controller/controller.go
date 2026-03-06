@@ -280,7 +280,31 @@ func (c *Controller) RegisterDevice(ctx context.Context, spotConnId string) erro
 		ClientSideTimestamp: uint64(time.Now().UnixMilli()),
 	}
 
-	return c.sp.PutConnectState(ctx, spotConnId, req)
+	respBody, err := c.sp.PutConnectState(ctx, spotConnId, req)
+	if err != nil {
+		return err
+	}
+
+	// The PutConnectState response body is a serialized Cluster protobuf.
+	// Parse it to immediately populate the cached cluster so that device
+	// listing works right away without waiting for a dealer push.
+	if len(respBody) > 0 {
+		var cluster connectpb.Cluster
+		if unmarshalErr := proto.Unmarshal(respBody, &cluster); unmarshalErr != nil {
+			c.log.Warnf("failed to unmarshal initial cluster from PutConnectState response: %v", unmarshalErr)
+		} else {
+			c.clusterLock.Lock()
+			c.cluster = &cluster
+			c.clusterLock.Unlock()
+
+			c.log.Infof("initial cluster loaded: active_device=%s, devices=%d",
+				cluster.GetActiveDeviceId(),
+				len(cluster.GetDevice()),
+			)
+		}
+	}
+
+	return nil
 }
 
 // SetConnectionId updates the dealer connection ID. This should be called

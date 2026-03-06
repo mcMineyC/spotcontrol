@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	spotcontrol "github.com/badfortrains/spotcontrol"
@@ -44,6 +45,13 @@ type Session struct {
 	hg     *mercury.Client
 	sp     *spclient.Spclient
 	dealer *dealer.Dealer
+
+	// oauthToken is the OAuth2 token obtained from the interactive PKCE flow.
+	// It carries the scopes needed by the Spotify Web API (api.spotify.com),
+	// which the Login5 token does not provide. Protected by oauthLock.
+	oauthToken *oauth2.Token
+	oauthConf  *oauth2.Config
+	oauthLock  sync.RWMutex
 }
 
 // NewSessionFromOptions creates a new Session by performing the full
@@ -84,6 +92,17 @@ func NewSessionFromOptions(ctx context.Context, opts *Options) (*Session, error)
 		deviceId:   opts.DeviceId,
 		deviceName: opts.DeviceName,
 		client:     opts.Client,
+	}
+
+	// Restore persisted OAuth2 token if available.
+	if opts.AppState != nil && opts.AppState.HasOAuthToken() {
+		s.oauthToken = &oauth2.Token{
+			AccessToken:  opts.AppState.OAuthAccessToken,
+			RefreshToken: opts.AppState.OAuthRefreshToken,
+			TokenType:    opts.AppState.OAuthTokenType,
+			Expiry:       opts.AppState.OAuthExpiry,
+		}
+		log.Debugf("restored persisted OAuth2 token (expires %s)", s.oauthToken.Expiry.Format(time.RFC3339))
 	}
 
 	if s.deviceName == "" {
@@ -160,6 +179,13 @@ func NewSessionFromOptions(ctx context.Context, opts *Options) (*Session, error)
 	s.sp, err = spclient.NewSpclient(ctx, log, s.client, spAddr, s.login5.AccessToken(), s.deviceId, s.clientToken)
 	if err != nil {
 		return nil, fmt.Errorf("failed initializing spclient: %w", err)
+	}
+
+	// If we have an OAuth2 token (from interactive login or restored state),
+	// configure the spclient to use it for Web API requests.
+	if s.oauthToken != nil {
+		s.sp.SetWebApiTokenFunc(s.WebApiToken())
+		log.Debugf("configured spclient with OAuth2 Web API token")
 	}
 
 	// ---- Step 7: Initialize dealer ----
@@ -246,6 +272,15 @@ func (s *Session) connectInteractive(ctx context.Context, log spotcontrol.Logger
 	if err != nil {
 		return fmt.Errorf("failed exchanging oauth2 code: %w", err)
 	}
+
+	// Store the full OAuth2 token and config so we can refresh it later and
+	// use it for Web API requests (api.spotify.com). The Login5 token only
+	// works for spclient endpoints.
+	s.oauthLock.Lock()
+	s.oauthToken = token
+	s.oauthConf = oauthConf
+	s.oauthLock.Unlock()
+	log.Debugf("stored OAuth2 token (expires %s, has refresh=%v)", token.Expiry.Format(time.RFC3339), token.RefreshToken != "")
 
 	// The Spotify OAuth2 token response includes the username in the extra
 	// data. If it's not there, we'll pass an empty string and let the AP
@@ -343,4 +378,72 @@ func (s *Session) ClientToken() string {
 // token is obtained even if the current one hasn't expired.
 func (s *Session) AccessToken(ctx context.Context, force bool) (string, error) {
 	return s.login5.AccessToken()(ctx, force)
+}
+
+// WebApiToken returns a GetLogin5TokenFunc (same signature) that provides
+// OAuth2 access tokens suitable for the Spotify Web API (api.spotify.com).
+//
+// Unlike the Login5 token (which only works for spclient endpoints), the
+// OAuth2 token carries the scopes requested during the interactive PKCE flow
+// (user-read-playback-state, user-modify-playback-state, etc.).
+//
+// The returned function automatically refreshes the token when it has expired,
+// using the stored refresh token and OAuth2 config.
+func (s *Session) WebApiToken() spotcontrol.GetLogin5TokenFunc {
+	return func(ctx context.Context, force bool) (string, error) {
+		s.oauthLock.RLock()
+		tok := s.oauthToken
+		conf := s.oauthConf
+		s.oauthLock.RUnlock()
+
+		if tok == nil {
+			return "", fmt.Errorf("no OAuth2 token available (interactive login required)")
+		}
+
+		// If not forced and the token is still valid, return it.
+		if !force && tok.Valid() {
+			return tok.AccessToken, nil
+		}
+
+		// Token expired or forced refresh — use the refresh token.
+		if tok.RefreshToken == "" {
+			// No refresh token; return the (possibly expired) access token and
+			// let the caller deal with any 401 error.
+			s.log.Warnf("OAuth2 token expired and no refresh token available")
+			return tok.AccessToken, nil
+		}
+
+		if conf == nil {
+			// We have a token from persisted state but no oauth config (the
+			// interactive flow was not run this session). Build one now with
+			// the same client ID and endpoint — we don't need RedirectURL or
+			// Scopes for a refresh.
+			conf = &oauth2.Config{
+				ClientID: spotcontrol.ClientIdHex,
+				Endpoint: spotifyoauth2.Endpoint,
+			}
+		}
+
+		s.log.Debugf("refreshing OAuth2 Web API token")
+		src := conf.TokenSource(ctx, tok)
+		newTok, err := src.Token()
+		if err != nil {
+			return "", fmt.Errorf("failed refreshing OAuth2 token: %w", err)
+		}
+
+		s.oauthLock.Lock()
+		s.oauthToken = newTok
+		s.oauthLock.Unlock()
+
+		s.log.Debugf("refreshed OAuth2 token (new expiry %s)", newTok.Expiry.Format(time.RFC3339))
+		return newTok.AccessToken, nil
+	}
+}
+
+// OAuthToken returns the current OAuth2 token, or nil if none is available.
+// This can be used to persist the token across sessions via AppState.
+func (s *Session) OAuthToken() *oauth2.Token {
+	s.oauthLock.RLock()
+	defer s.oauthLock.RUnlock()
+	return s.oauthToken
 }
