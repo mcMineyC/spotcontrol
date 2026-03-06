@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package spotify.clienttoken.data.v0;
+
+option go_package = "github.com/badfortrains/spotcontrol/proto/spotify/clienttoken/data/v0";
+
+message ConnectivitySdkData {
+  PlatformSpecificData platform_specific_data = 1;
+  string device_id = 2;
+}
+
+message PlatformSpecificData {
+  oneof data {
+    NativeAndroidData android = 1;
+    NativeIOSData ios = 2;
+    NativeDesktopWindowsData desktop_windows = 3;
+    NativeDesktopLinuxData desktop_linux = 4;
+    NativeDesktopMacOSData desktop_macos = 5;
+  }
+}
+
+message NativeAndroidData {
+  int32 major_version = 1;
+  int32 minor_version = 2;
+  int32 patch_version = 3;
+  int32 api_version = 4;
+  string device_name = 5;
+  string device_manufacturer = 6;
+  string device_brand = 7;
+  string device_model = 8;
+  string device_arch = 9;
+  ScreenDimensions screen_dimensions = 10;
+}
+
+message NativeIOSData {
+  int32 major_version = 1;
+  int32 minor_version = 2;
+  int32 patch_version = 3;
+  string user_interface_idiom = 4;
+  bool target_iphone_simulator = 5;
+  string hw_machine = 6;
+  ScreenDimensions screen_dimensions = 7;
+}
+
+message NativeDesktopWindowsData {
+  int32 os_version = 1;
+  int32 os_build = 3;
+  bool platform_id = 4;
+  bool unknown = 5;
+  string image_file_machine = 6;
+  bool pe_kind = 7;
+}
+
+message NativeDesktopLinuxData {
+  string system_name = 1;
+  string system_release = 2;
+  string system_version = 3;
+  string hardware = 4;
+}
+
+message NativeDesktopMacOSData {
+  string system_version = 1;
+  string hw_model = 2;
+  string compiled_cpu_type = 3;
+}
+
+message ScreenDimensions {
+  int32 width = 1;
+  int32 height = 2;
+  int32 density = 3;
+  int32 unknown_value = 4;
+}

@@ -1,0 +1,110 @@
+syntax = "proto3";
+
+package spotify.clienttoken.http.v0;
+
+option go_package = "github.com/badfortrains/spotcontrol/proto/spotify/clienttoken/http/v0";
+
+import "spotify/clienttoken/data/v0/connectivity.proto";
+
+enum ClientTokenRequestType {
+  REQUEST_UNKNOWN = 0;
+  REQUEST_CLIENT_DATA_REQUEST = 1;
+  REQUEST_CHALLENGE_ANSWERS_REQUEST = 2;
+}
+
+enum ClientTokenResponseType {
+  RESPONSE_UNKNOWN = 0;
+  RESPONSE_GRANTED_TOKEN_RESPONSE = 1;
+  RESPONSE_CHALLENGES_RESPONSE = 2;
+}
+
+message ClientTokenRequest {
+  ClientTokenRequestType request_type = 1;
+  oneof request {
+    ClientDataRequest client_data = 2;
+    ChallengeAnswersRequest challenge_answers = 3;
+  }
+}
+
+message ClientDataRequest {
+  string client_version = 1;
+  string client_id = 2;
+  oneof data {
+    spotify.clienttoken.data.v0.ConnectivitySdkData connectivity_sdk_data = 3;
+  }
+}
+
+message ChallengeAnswersRequest {
+  string state = 1;
+  repeated ChallengeAnswer answers = 2;
+}
+
+message ChallengeAnswer {
+  oneof answer {
+    HashCashAnswer hash_cash = 1;
+    CodeAnswer code = 2;
+    EvaluateJSAnswer evaluate_js = 3;
+  }
+}
+
+message HashCashAnswer {
+  bytes suffix = 1;
+  int64 duration = 2;
+}
+
+message CodeAnswer {
+  string value = 1;
+}
+
+message EvaluateJSAnswer {
+  string result = 1;
+}
+
+message ClientTokenResponse {
+  ClientTokenResponseType response_type = 1;
+  oneof response {
+    GrantedTokenResponse granted_token = 2;
+    ChallengesResponse challenges = 3;
+  }
+}
+
+message GrantedTokenResponse {
+  string token = 1;
+  int32 expires_after_seconds = 2;
+  int32 refresh_after_seconds = 3;
+  repeated TokenDomain domains = 4;
+}
+
+message TokenDomain {
+  string domain = 1;
+}
+
+message ChallengesResponse {
+  string state = 1;
+  repeated Challenge challenges = 2;
+}
+
+message Challenge {
+  oneof challenge {
+    HashCashChallenge hash_cash = 1;
+    CodeChallenge code = 2;
+    EvaluateJSChallenge evaluate_js = 3;
+  }
+}
+
+message HashCashChallenge {
+  bytes prefix = 1;
+  int32 length = 2;
+}
+
+message CodeChallenge {
+  string method = 1;
+  int32 length = 2;
+  int64 expires_in = 3;
+  string canonical_phone_number = 4;
+}
+
+message EvaluateJSChallenge {
+  string code = 1;
+  repeated string libraries_versions = 2;
+}

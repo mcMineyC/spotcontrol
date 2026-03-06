@@ -1,0 +1,93 @@
+syntax = "proto3";
+
+package spotify.login5.v3;
+
+option go_package = "github.com/badfortrains/spotcontrol/proto/spotify/login5/v3";
+
+import "spotify/login5/v3/login5_client_info.proto";
+import "spotify/login5/v3/credentials/login5_credentials.proto";
+import "spotify/login5/v3/challenges/login5_challenges_hashcash.proto";
+import "spotify/login5/v3/challenges/login5_challenges_code.proto";
+
+enum LoginError {
+  UNKNOWN_ERROR = 0;
+  INVALID_CREDENTIALS = 1;
+  BAD_REQUEST = 2;
+  UNSUPPORTED_LOGIN_PROTOCOL = 3;
+  TIMEOUT = 4;
+  UNKNOWN_IDENTIFIER = 5;
+  TOO_MANY_ATTEMPTS = 6;
+  INVALID_PHONENUMBER = 7;
+  TRY_AGAIN_LATER = 8;
+}
+
+message LoginRequest {
+  ClientInfo client_info = 1;
+  bytes login_context = 2;
+  ChallengeSolutions challenge_solutions = 3;
+
+  oneof login_method {
+    spotify.login5.v3.credentials.StoredCredential stored_credential = 100;
+    spotify.login5.v3.credentials.Password password = 101;
+    spotify.login5.v3.credentials.FacebookAccessToken facebook_access_token = 102;
+    spotify.login5.v3.credentials.PhoneNumber phone_number = 103;
+    spotify.login5.v3.credentials.OneTimeToken one_time_token = 104;
+    spotify.login5.v3.credentials.ParentChildCredential parent_child_credential = 105;
+    spotify.login5.v3.credentials.AppleSignInCredential apple_sign_in_credential = 106;
+    spotify.login5.v3.credentials.SamsungSignInCredential samsung_sign_in_credential = 107;
+    spotify.login5.v3.credentials.GoogleSignInCredential google_sign_in_credential = 108;
+  }
+}
+
+message LoginResponse {
+  oneof response {
+    LoginOk ok = 1;
+    LoginError error = 2;
+    Challenges challenges = 3;
+  }
+
+  bytes login_context = 4;
+  string identifier_token = 5;
+  UserInfo user_info = 6;
+}
+
+message LoginOk {
+  string username = 1;
+  string access_token = 2;
+  bytes stored_credential = 3;
+  int32 access_token_expires_in = 4;
+}
+
+message UserInfo {
+  string name = 1;
+  string email = 2;
+  bool email_verified = 3;
+  string birthdate = 4;
+  bool gender_neutral = 5;
+  string phone = 6;
+  bool phone_verified = 7;
+  bool email_already_registered = 8;
+}
+
+message Challenges {
+  bytes login_context = 1;
+  repeated Challenge challenges = 2;
+}
+
+message Challenge {
+  oneof challenge {
+    spotify.login5.v3.challenges.HashcashChallenge hashcash = 1;
+    spotify.login5.v3.challenges.CodeChallenge code = 2;
+  }
+}
+
+message ChallengeSolutions {
+  repeated ChallengeSolution solutions = 1;
+}
+
+message ChallengeSolution {
+  oneof solution {
+    spotify.login5.v3.challenges.HashcashSolution hashcash = 1;
+    spotify.login5.v3.challenges.CodeSolution code = 2;
+  }
+}
