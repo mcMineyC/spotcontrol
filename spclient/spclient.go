@@ -62,6 +62,54 @@ type ResumeOrigin struct {
 	FeatureIdentifier string `json:"feature_identifier,omitempty"`
 }
 
+// PreparePlayOptions carries the prepare_play_options object sent with "play"
+// commands. This was captured from the Spotify desktop client's playlist play
+// command (cuts/playlist.bin). It controls shuffle, skip-to, session, license,
+// and other playback preparation parameters.
+type PreparePlayOptions struct {
+	AlwaysPlaySomething   bool                    `json:"always_play_something"`
+	SkipTo                *CommandSkipTo          `json:"skip_to,omitempty"`
+	InitiallyPaused       bool                    `json:"initially_paused"`
+	SystemInitiated       bool                    `json:"system_initiated"`
+	PlayerOptionsOverride *PlayerOptionsOverride  `json:"player_options_override,omitempty"`
+	SessionId             string                  `json:"session_id,omitempty"`
+	License               string                  `json:"license,omitempty"`
+	Suppressions          *connectpb.Suppressions `json:"suppressions,omitempty"`
+	PrefetchLevel         string                  `json:"prefetch_level,omitempty"`
+	AudioStream           string                  `json:"audio_stream,omitempty"`
+	ConfigurationOverride *ConfigurationOverride  `json:"configuration_override,omitempty"`
+}
+
+// PlayerOptionsOverride carries player option overrides for the
+// prepare_play_options. The Spotify desktop client sends this to control
+// shuffle state and context enhancement mode when starting playlist playback.
+type PlayerOptionsOverride struct {
+	ShufflingContext bool                        `json:"shuffling_context"`
+	Modes            *PlayerOptionsOverrideModes `json:"modes,omitempty"`
+}
+
+// PlayerOptionsOverrideModes carries mode overrides within PlayerOptionsOverride.
+type PlayerOptionsOverrideModes struct {
+	ContextEnhancement string `json:"context_enhancement,omitempty"`
+}
+
+// ConfigurationOverride is a placeholder for the configuration_override object
+// sent with "play" commands. Currently observed as empty ({}) from the desktop
+// client.
+type ConfigurationOverride struct{}
+
+// PlayOptions carries the play_options object sent with "play" commands. This
+// controls how the play command interacts with the current playback state
+// (replace, insert, etc.) and whether restrictions are overridden.
+type PlayOptions struct {
+	Reason               string `json:"reason,omitempty"`
+	Operation            string `json:"operation,omitempty"`
+	Trigger              string `json:"trigger,omitempty"`
+	OverrideRestrictions bool   `json:"override_restrictions"`
+	OnlyForLocalDevice   bool   `json:"only_for_local_device"`
+	SystemInitiated      bool   `json:"system_initiated"`
+}
+
 // PlayerCommand is the command object nested inside a PlayerCommandRequest.
 // It mirrors the dealer request command format used by librespot and the
 // Spotify desktop client for remote device control.
@@ -108,6 +156,16 @@ type PlayerCommand struct {
 
 	// ResumeOrigin is sent with "resume" commands.
 	ResumeOrigin *ResumeOrigin `json:"resume_origin,omitempty"`
+
+	// PreparePlayOptions is sent with "play" commands (e.g. playlist play).
+	// It controls shuffle, skip-to, session, license, and other playback
+	// preparation parameters. Format captured from cuts/playlist.bin.
+	PreparePlayOptions *PreparePlayOptions `json:"prepare_play_options,omitempty"`
+
+	// PlayOptions is sent with "play" commands (e.g. playlist play).
+	// It controls how the command interacts with the current playback state.
+	// Format captured from cuts/playlist.bin.
+	PlayOptions *PlayOptions `json:"play_options,omitempty"`
 }
 
 // PlayerCommandRequest is the top-level JSON envelope sent to the

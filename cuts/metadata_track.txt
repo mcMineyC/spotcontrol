@@ -1,0 +1,42 @@
+GET https://spclient.wg.spotify.com/metadata/4/track/c1c98828fc2c44d6bb247ad01bdb7d4d?market=from_token HTTP/2.0
+origin: https://xpui.app.spotify.com
+user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.7559.97 Spotify/1.2.84.476 Safari/537.36
+accept: application/json
+accept-language: en
+app-platform: OSX
+authorization: Bearer BQAbqN4YTwp-gUEEgs8ffIZyJXyIFmCYF4DlcK-gybQbU_LR82ADbXQHpD-iH4loRM5H2uX3QQWVwTGrcTFfpjvZPccW0wDzsmkv3tx264oTxPSZUgN9-Y_Z3wexQlKEzCtE2ViE-9-zkdX-K65prGKnVPdXh5kvqpUeVCkAemHo0z4-jTT1aoe0U4yqFI57cDPe8n0dMOtks7XjTT8a1ORUVLTaR80eK9hK_fe4m_HOR8RxFNz8qL96CjQdn6a4iJDX248zBYJTx9_I1Ks52Ucvhmuqi7JwJMWHy2PwRFSMiBQWVRIyYIQBZ0leMZqt_a4P07a9qa-okJOS2myrTbKLoyZsAOoedXshCyDfxL8AZgvrdNjr4yakkJ9ipwH-F8RYMk5asunp_UkzYx4M9ctwHBVf6P2nvrrDKRCqsfBLIVkzX7p6KKcjJskoeOcMgDHPelVApYxJySUfhdwjymyoNYgR_vO-TAybE3gmBz6kOu6TyOM
+client-token: AAD4N8RW+Tb6UlhX5cXVheE2ctYlbfnaUJNAodURntkO4/6Omh9ZI62NFz4s5pJ3/pfTTcEHVgzOFS9IddbiEVYBbpMYQjW6Pfb7D/keFg6oF7z4U4sWuWHIUPkVErOM4tPNugM+PEnPGRHo+yBb0NnZUmrmCY1MXJ9DzNEGIFLvBMXBcUai7/qnkQ9Fjdcya2UF8ACgT3o2iLrNqEXErjNdlxo6vgKCnzT80O73yhhD/q6b6BOnCEpoYuwwNYWRdqbGcynN3FQQju2INEUgE5Zzs8V2l2ucr2Y827mFj343oiujH06NVRTLTg/TYQ1tz9WlTynUfQx2dqUxPyOnZwDn
+sec-ch-ua: "Not(A:Brand";v="8", "Chromium";v="144"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "macOS"
+spotify-app-version: 1.2.84.476
+sec-fetch-site: same-site
+sec-fetch-mode: cors
+sec-fetch-dest: empty
+referer: https://xpui.app.spotify.com/
+accept-encoding: gzip, deflate, br, zstd
+priority: u=1, i
+
+
+
+HTTP/2.0 200 
+content-type: application/json; charset=utf-8
+cache-control: public, max-age=74514
+etag: "MC-OUEwRkQzMzQ="
+md-version: 1772748004
+mc-ttl: 74514
+mc-cache-policy: public
+mc-etag: 9A0FD334
+access-control-allow-origin: https://xpui.app.spotify.com
+content-length: 1704
+server-timing: edge;dur=3
+strict-transport-security: max-age=31536000
+x-content-type-options: nosniff
+alt-svc: h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+alt-svc: h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+access-control-allow-credentials: true
+date: Fri, 06 Mar 2026 22:08:37 GMT
+server: envoy
+via: HTTP/2 edgeproxy, 1.1 google
+
+{"gid": "c1c98828fc2c44d6bb247ad01bdb7d4d","name": "Koopa's Theme (From \"Super Mario 64\")","album": {"gid": "1709f7cb31ef4a9cb727cc12e1d3dbce","name": "Year 6","artist": [{"gid": "193573284b934099a98156fb0ccaa24e","name": "Qumu"}],"label": "Qumu","date": {"year": 2020,"month": 9,"day": 10},"cover_group": {"image": [{"file_id": "ab67616d00001e0240baf4dd6b252ba0943afdc9","size": "DEFAULT","width": 300,"height": 300},{"file_id": "ab67616d0000485140baf4dd6b252ba0943afdc9","size": "SMALL","width": 64,"height": 64},{"file_id": "ab67616d0000b27340baf4dd6b252ba0943afdc9","size": "LARGE","width": 640,"height": 640}]},"licensor": {"uuid": "e0b063f7069449558ac1b5e967fb01bd"}},"artist": [{"gid": "193573284b934099a98156fb0ccaa24e","name": "Qumu"}],"number": 15,"disc_number": 1,"duration": 180521,"popularity": 22,"external_id": [{"type": "isrc","id": "QZGWW1954490"}],"earliest_live_timestamp": 1620207002,"licensor": {"uuid": "e0b063f7069449558ac1b5e967fb01bd"},"language_of_performance": ["zxx"],"original_audio": {"uuid": "fd45eda92f664b99b6a35096d51d243d","format": "AUDIO_FORMAT_STEREO"},"original_title": "Koopa's Theme (From \"Super Mario 64\")","artist_with_role": [{"artist_gid": "193573284b934099a98156fb0ccaa24e","artist_name": "Qumu","role": "ARTIST_ROLE_MAIN_ARTIST"}],"canonical_uri": "spotify:track:5TFCp6cxCaJRhbdn6IWEGh","content_authorization_attributes": "0a2c180352280a2465306230363366372d303639342d343935352d386163312d6235653936376662303162641003","audio_formats": [{"original_audio": {"uuid": "fd45eda92f664b99b6a35096d51d243d","format": "AUDIO_FORMAT_STEREO"}}],"media_type": "AUDIO","implementation_details": {"catalog_insertion_date": {"seconds": 1620206998,"nanos": 935000000}}}

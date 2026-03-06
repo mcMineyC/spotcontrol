@@ -118,6 +118,15 @@ type Controller struct {
 	volumeDebouncing  bool          // true when a debounced send is pending
 	volumeDebounceDur time.Duration // configurable, default 500ms
 
+	// --- event subscribers ---
+	subs eventSubscribers
+
+	// --- track change detection & metadata cache ---
+	lastTrackURI string
+	lastTrackMu  sync.Mutex
+	lastMeta     *TrackMetadata
+	lastMetaMu   sync.RWMutex
+
 	stopCh chan struct{}
 	once   sync.Once
 }
@@ -376,6 +385,10 @@ func (c *Controller) RegisterDevice(ctx context.Context, spotConnId string) erro
 				cluster.GetActiveDeviceId(),
 				len(cluster.GetDevice()),
 			)
+
+			// Emit initial events so subscribers see the starting state
+			// without waiting for the first dealer push.
+			c.processClusterUpdate(&cluster, connectpb.ClusterUpdateReason_NEW_DEVICE_APPEARED, nil)
 		}
 	}
 
@@ -403,8 +416,8 @@ func (c *Controller) clusterUpdateLoop(ch <-chan dealer.Message) {
 	}
 }
 
-// handleClusterUpdate parses a ClusterUpdate protobuf from a dealer message
-// and caches the cluster state.
+// handleClusterUpdate parses a ClusterUpdate protobuf from a dealer message,
+// caches the cluster state, and emits events to subscriber channels.
 func (c *Controller) handleClusterUpdate(msg dealer.Message) {
 	var update connectpb.ClusterUpdate
 	if err := proto.Unmarshal(msg.Payload, &update); err != nil {
@@ -421,6 +434,9 @@ func (c *Controller) handleClusterUpdate(msg dealer.Message) {
 		update.Cluster.GetActiveDeviceId(),
 		len(update.Cluster.GetDevice()),
 	)
+
+	// Emit events to subscriber channels.
+	c.processClusterUpdate(update.Cluster, update.GetUpdateReason(), update.GetDevicesThatChanged())
 }
 
 // Cluster returns the most recently cached connect-state cluster, or nil if
@@ -459,5 +475,8 @@ func (c *Controller) Close() {
 			c.volumeTimer.Stop()
 		}
 		c.volumeMu.Unlock()
+
+		// Close all event subscriber channels.
+		c.closeAllSubscribers()
 	})
 }

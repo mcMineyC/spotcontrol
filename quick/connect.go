@@ -9,6 +9,53 @@ import (
 	"github.com/mcMineyC/spotcontrol/session"
 )
 
+// ---------------------------------------------------------------------------
+// Pass-through methods for event subscriptions & metadata
+// ---------------------------------------------------------------------------
+
+// SubscribeDeviceList returns a channel that receives DeviceListEvent values
+// whenever the visible device list changes (devices appear, disappear, or
+// change properties). The channel is closed when the Controller is closed.
+func (r *ConnectResult) SubscribeDeviceList() <-chan controller.DeviceListEvent {
+	return r.Controller.SubscribeDeviceList()
+}
+
+// SubscribePlayback returns a channel that receives PlaybackEvent values
+// whenever the playback state changes (play/pause, track change, seek,
+// shuffle/repeat toggle, etc.). The channel is closed when the Controller is
+// closed.
+func (r *ConnectResult) SubscribePlayback() <-chan controller.PlaybackEvent {
+	return r.Controller.SubscribePlayback()
+}
+
+// SubscribeMetadata returns a channel that receives MetadataEvent values
+// whenever the currently playing track changes and its rich metadata (title,
+// artist, album, cover art URL) has been fetched from the private metadata
+// API. The channel is closed when the Controller is closed.
+func (r *ConnectResult) SubscribeMetadata() <-chan controller.MetadataEvent {
+	return r.Controller.SubscribeMetadata()
+}
+
+// GetTrackMetadata returns the cached rich metadata for the currently playing
+// track, or nil if no track is playing or metadata has not been fetched yet.
+// This is a non-blocking instant read.
+func (r *ConnectResult) GetTrackMetadata() *controller.TrackMetadata {
+	return r.Controller.GetTrackMetadata()
+}
+
+// FetchTrackMetadata fetches rich metadata for the given track URI from the
+// private spclient metadata API. This always makes a network request.
+func (r *ConnectResult) FetchTrackMetadata(ctx context.Context, trackURI string) (*controller.TrackMetadata, error) {
+	return r.Controller.FetchTrackMetadata(ctx, trackURI)
+}
+
+// FetchCurrentTrackMetadata fetches rich metadata for the currently playing
+// track from the private spclient metadata API. Returns nil with no error if
+// no track is currently playing.
+func (r *ConnectResult) FetchCurrentTrackMetadata(ctx context.Context) (*controller.TrackMetadata, error) {
+	return r.Controller.FetchCurrentTrackMetadata(ctx)
+}
+
 // QuickConfig holds the configuration for the high-level Connect function.
 // It provides sensible defaults for most fields so that the minimal usage is:
 //
@@ -136,6 +183,12 @@ func (r *ConnectResult) TransferPlayback(ctx context.Context, deviceId string, p
 // AddToQueue adds a track URI to the playback queue.
 func (r *ConnectResult) AddToQueue(ctx context.Context, trackURI string, deviceId string) error {
 	return r.Controller.AddToQueue(ctx, trackURI, deviceId)
+}
+
+// PlayTrack starts playback of one or more tracks by their Spotify URIs using
+// the connect-state player command endpoint, without context or recommendations.
+func (r *ConnectResult) PlayTrack(ctx context.Context, trackURIs []string, opts *controller.PlayTrackOptions) error {
+	return r.Controller.PlayTrack(ctx, trackURIs, opts)
 }
 
 // ---------------------------------------------------------------------------
