@@ -2,11 +2,7 @@ package controller
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 	"sync"
 	"time"
 
@@ -15,6 +11,7 @@ import (
 	connectpb "github.com/badfortrains/spotcontrol/proto/spotify/connectstate"
 	devicespb "github.com/badfortrains/spotcontrol/proto/spotify/connectstate/devices"
 	"github.com/badfortrains/spotcontrol/spclient"
+
 	"google.golang.org/protobuf/proto"
 )
 
@@ -64,6 +61,23 @@ type PlayerState struct {
 // from the connect-state dealer WebSocket push messages. It also provides
 // direct Web API queries as an alternative.
 //
+// By default, playback control commands are sent through the spclient proxy
+// which routes Web API style requests (/v1/me/player/*) through the spclient
+// infrastructure rather than the public api.spotify.com endpoint. This avoids
+// the public Web API rate limits.
+//
+// If UseWebApi is set in Config, commands are sent directly to
+// api.spotify.com instead (not recommended — subject to stricter rate limits).
+//
+// The connect-state transfer endpoint is used for playback transfers, matching
+// librespot's transfer() implementation.
+//
+// The connect-state volume endpoint is used for volume changes, matching
+// librespot's SetVolumeCommand handling.
+//
+// Volume updates are debounced (500ms) following librespot's approach to
+// prevent rate limiting from rapid volume adjustments.
+//
 // Controller is safe for concurrent use.
 type Controller struct {
 	log spotcontrol.Logger
@@ -88,9 +102,28 @@ type Controller struct {
 	// at least once during this session.
 	registered bool
 
+	// useWebApi controls whether playback commands are routed directly to the
+	// public Web API (api.spotify.com) or through the spclient proxy. When
+	// false (the default), commands use the spclient proxy which routes
+	// /v1/me/player/* requests through the spclient infrastructure, avoiding
+	// the stricter public API rate limits.
+	useWebApi bool
+
+	// --- volume debouncing (matches librespot's VOLUME_UPDATE_DELAY) ---
+	volumeMu          sync.Mutex
+	pendingVolume     int           // the volume value waiting to be sent
+	pendingVolumeId   string        // target device for the pending volume
+	volumeTimer       *time.Timer   // fires after volumeDebounceDelay
+	volumeDebouncing  bool          // true when a debounced send is pending
+	volumeDebounceDur time.Duration // configurable, default 500ms
+
 	stopCh chan struct{}
 	once   sync.Once
 }
+
+// volumeDebounceDefault is the default delay before a debounced volume command
+// is actually sent. Matches librespot's VOLUME_UPDATE_DELAY (500ms).
+const volumeDebounceDefault = 500 * time.Millisecond
 
 // Config holds the configuration for creating a new Controller.
 type Config struct {
@@ -111,6 +144,17 @@ type Config struct {
 
 	// DeviceType is the Spotify device type for this controller.
 	DeviceType devicespb.DeviceType
+
+	// UseWebApi forces playback commands to be routed directly to the public
+	// Web API (api.spotify.com) instead of through the spclient proxy. This
+	// is not recommended because api.spotify.com has stricter rate limits.
+	// Default false.
+	UseWebApi bool
+
+	// VolumeDebounce overrides the default volume debounce duration. If zero,
+	// the default of 500ms (matching librespot) is used. Set to a negative
+	// value to disable debouncing.
+	VolumeDebounce time.Duration
 }
 
 // NewController creates a new Controller and starts listening for cluster
@@ -125,14 +169,21 @@ func NewController(cfg Config) *Controller {
 		log = &spotcontrol.NullLogger{}
 	}
 
+	vd := cfg.VolumeDebounce
+	if vd == 0 {
+		vd = volumeDebounceDefault
+	}
+
 	c := &Controller{
-		log:        log,
-		sp:         cfg.Spclient,
-		dealer:     cfg.Dealer,
-		deviceId:   cfg.DeviceId,
-		deviceName: cfg.DeviceName,
-		deviceType: cfg.DeviceType,
-		stopCh:     make(chan struct{}),
+		log:               log,
+		sp:                cfg.Spclient,
+		dealer:            cfg.Dealer,
+		deviceId:          cfg.DeviceId,
+		deviceName:        cfg.DeviceName,
+		deviceType:        cfg.DeviceType,
+		useWebApi:         cfg.UseWebApi,
+		volumeDebounceDur: vd,
+		stopCh:            make(chan struct{}),
 	}
 
 	return c
@@ -171,6 +222,10 @@ func (c *Controller) Start(ctx context.Context) error {
 
 	return nil
 }
+
+// ---------------------------------------------------------------------------
+// Connection ID handling
+// ---------------------------------------------------------------------------
 
 // connectionIdLoop processes dealer messages that carry the
 // Spotify-Connection-Id. On each new connection ID it stores the value and
@@ -218,6 +273,25 @@ func (c *Controller) handleConnectionMessage(msg dealer.Message) {
 		c.log.Infof("device registered with connect-state (name=%s, id=%s)", c.deviceName, c.deviceId)
 	}
 }
+
+// SetConnectionId updates the dealer connection ID. This should be called
+// whenever the dealer reconnects and a new connection ID is obtained.
+func (c *Controller) SetConnectionId(id string) {
+	c.spotConnIdLock.Lock()
+	c.spotConnId = id
+	c.spotConnIdLock.Unlock()
+}
+
+// connectionId returns the current dealer connection ID.
+func (c *Controller) connectionId() string {
+	c.spotConnIdLock.RLock()
+	defer c.spotConnIdLock.RUnlock()
+	return c.spotConnId
+}
+
+// ---------------------------------------------------------------------------
+// Device registration
+// ---------------------------------------------------------------------------
 
 // RegisterDevice announces this controller as a new device to the Spotify
 // connect-state backend by sending a PutConnectState with reason NEW_DEVICE.
@@ -307,20 +381,9 @@ func (c *Controller) RegisterDevice(ctx context.Context, spotConnId string) erro
 	return nil
 }
 
-// SetConnectionId updates the dealer connection ID. This should be called
-// whenever the dealer reconnects and a new connection ID is obtained.
-func (c *Controller) SetConnectionId(id string) {
-	c.spotConnIdLock.Lock()
-	c.spotConnId = id
-	c.spotConnIdLock.Unlock()
-}
-
-// connectionId returns the current dealer connection ID.
-func (c *Controller) connectionId() string {
-	c.spotConnIdLock.RLock()
-	defer c.spotConnIdLock.RUnlock()
-	return c.spotConnId
-}
+// ---------------------------------------------------------------------------
+// Cluster state management
+// ---------------------------------------------------------------------------
 
 // clusterUpdateLoop processes cluster update messages from the dealer in the
 // background.
@@ -359,471 +422,6 @@ func (c *Controller) handleClusterUpdate(msg dealer.Message) {
 	)
 }
 
-// Close stops the controller's background processing. After Close returns the
-// controller should not be used.
-func (c *Controller) Close() {
-	c.once.Do(func() {
-		close(c.stopCh)
-	})
-}
-
-// ---------------------------------------------------------------------------
-// Device listing
-// ---------------------------------------------------------------------------
-
-// ListDevices returns the list of devices from the cached connect-state
-// cluster. The cluster is updated in real-time via the dealer WebSocket.
-// Returns nil if no cluster data is available yet.
-func (c *Controller) ListDevices() []DeviceInfo {
-	c.clusterLock.RLock()
-	cluster := c.cluster
-	c.clusterLock.RUnlock()
-
-	if cluster == nil {
-		return nil
-	}
-
-	activeId := cluster.GetActiveDeviceId()
-	devices := make([]DeviceInfo, 0, len(cluster.Device))
-	for id, info := range cluster.Device {
-		di := DeviceInfo{
-			Id:             id,
-			Name:           info.GetName(),
-			Type:           info.GetDeviceType().String(),
-			IsActive:       id == activeId,
-			Volume:         int(info.GetVolume()),
-			SupportsVolume: info.GetCapabilities() != nil && !info.GetCapabilities().GetDisableVolume(),
-		}
-		devices = append(devices, di)
-	}
-
-	return devices
-}
-
-// ListDevicesFromAPI queries the Spotify Web API for the current list of
-// available devices. This is more accurate than the cached cluster state but
-// requires a network request.
-func (c *Controller) ListDevicesFromAPI(ctx context.Context) ([]DeviceInfo, error) {
-	resp, err := c.sp.WebApiRequest(ctx, "GET", "/v1/me/player/devices", nil, nil, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed querying devices API: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("devices API returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var result struct {
-		Devices []struct {
-			Id               string `json:"id"`
-			IsActive         bool   `json:"is_active"`
-			IsPrivateSession bool   `json:"is_private_session"`
-			IsRestricted     bool   `json:"is_restricted"`
-			Name             string `json:"name"`
-			Type             string `json:"type"`
-			VolumePercent    int    `json:"volume_percent"`
-			SupportsVolume   bool   `json:"supports_volume"`
-		} `json:"devices"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed decoding devices response: %w", err)
-	}
-
-	devices := make([]DeviceInfo, len(result.Devices))
-	for i, d := range result.Devices {
-		devices[i] = DeviceInfo{
-			Id:             d.Id,
-			Name:           d.Name,
-			Type:           d.Type,
-			IsActive:       d.IsActive,
-			Volume:         d.VolumePercent,
-			SupportsVolume: d.SupportsVolume,
-		}
-	}
-
-	return devices, nil
-}
-
-// GetPlayerState queries the Spotify Web API for the current playback state.
-func (c *Controller) GetPlayerState(ctx context.Context) (*PlayerState, error) {
-	resp, err := c.sp.WebApiRequest(ctx, "GET", "/v1/me/player", nil, nil, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed querying player state API: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode == 204 {
-		// No active playback.
-		return nil, nil
-	}
-
-	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("player state API returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var result struct {
-		IsPlaying  bool   `json:"is_playing"`
-		ProgressMs int64  `json:"progress_ms"`
-		ShuffleOn  bool   `json:"shuffle_state"`
-		RepeatMode string `json:"repeat_state"`
-		Device     struct {
-			Id string `json:"id"`
-		} `json:"device"`
-		Item struct {
-			Uri        string `json:"uri"`
-			DurationMs int64  `json:"duration_ms"`
-		} `json:"item"`
-		Context struct {
-			Uri string `json:"uri"`
-		} `json:"context"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed decoding player state response: %w", err)
-	}
-
-	return &PlayerState{
-		IsPlaying:     result.IsPlaying,
-		TrackURI:      result.Item.Uri,
-		ContextURI:    result.Context.Uri,
-		PositionMs:    result.ProgressMs,
-		DurationMs:    result.Item.DurationMs,
-		DeviceId:      result.Device.Id,
-		Shuffle:       result.ShuffleOn,
-		RepeatContext: result.RepeatMode == "context",
-		RepeatTrack:   result.RepeatMode == "track",
-	}, nil
-}
-
-// ---------------------------------------------------------------------------
-// Playback control (via Web API through spclient)
-// ---------------------------------------------------------------------------
-
-// Play resumes playback on the currently active device, or on the specified
-// device if deviceId is non-empty.
-func (c *Controller) Play(ctx context.Context, deviceId string) error {
-	query := url.Values{}
-	if deviceId != "" {
-		query.Set("device_id", deviceId)
-	}
-
-	resp, err := c.sp.WebApiRequest(ctx, "PUT", "/v1/me/player/play", query, nil, nil)
-	if err != nil {
-		return fmt.Errorf("failed sending play command: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != 204 && resp.StatusCode != 200 && resp.StatusCode != 202 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("play command failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	return nil
-}
-
-// Pause pauses playback on the currently active device, or on the specified
-// device if deviceId is non-empty.
-func (c *Controller) Pause(ctx context.Context, deviceId string) error {
-	query := url.Values{}
-	if deviceId != "" {
-		query.Set("device_id", deviceId)
-	}
-
-	resp, err := c.sp.WebApiRequest(ctx, "PUT", "/v1/me/player/pause", query, nil, nil)
-	if err != nil {
-		return fmt.Errorf("failed sending pause command: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != 204 && resp.StatusCode != 200 && resp.StatusCode != 202 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("pause command failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	return nil
-}
-
-// Next skips to the next track.
-func (c *Controller) Next(ctx context.Context, deviceId string) error {
-	query := url.Values{}
-	if deviceId != "" {
-		query.Set("device_id", deviceId)
-	}
-
-	resp, err := c.sp.WebApiRequest(ctx, "POST", "/v1/me/player/next", query, nil, nil)
-	if err != nil {
-		return fmt.Errorf("failed sending next command: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != 204 && resp.StatusCode != 200 && resp.StatusCode != 202 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("next command failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	return nil
-}
-
-// Previous skips to the previous track.
-func (c *Controller) Previous(ctx context.Context, deviceId string) error {
-	query := url.Values{}
-	if deviceId != "" {
-		query.Set("device_id", deviceId)
-	}
-
-	resp, err := c.sp.WebApiRequest(ctx, "POST", "/v1/me/player/previous", query, nil, nil)
-	if err != nil {
-		return fmt.Errorf("failed sending previous command: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != 204 && resp.StatusCode != 200 && resp.StatusCode != 202 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("previous command failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	return nil
-}
-
-// SetVolume sets the playback volume to the given percentage (0-100).
-func (c *Controller) SetVolume(ctx context.Context, volumePercent int, deviceId string) error {
-	if volumePercent < 0 {
-		volumePercent = 0
-	}
-	if volumePercent > 100 {
-		volumePercent = 100
-	}
-
-	query := url.Values{
-		"volume_percent": []string{fmt.Sprintf("%d", volumePercent)},
-	}
-	if deviceId != "" {
-		query.Set("device_id", deviceId)
-	}
-
-	resp, err := c.sp.WebApiRequest(ctx, "PUT", "/v1/me/player/volume", query, nil, nil)
-	if err != nil {
-		return fmt.Errorf("failed sending volume command: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != 204 && resp.StatusCode != 200 && resp.StatusCode != 202 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("volume command failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	return nil
-}
-
-// Seek seeks to the given position in the current track.
-func (c *Controller) Seek(ctx context.Context, positionMs int64, deviceId string) error {
-	query := url.Values{
-		"position_ms": []string{fmt.Sprintf("%d", positionMs)},
-	}
-	if deviceId != "" {
-		query.Set("device_id", deviceId)
-	}
-
-	resp, err := c.sp.WebApiRequest(ctx, "PUT", "/v1/me/player/seek", query, nil, nil)
-	if err != nil {
-		return fmt.Errorf("failed sending seek command: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != 204 && resp.StatusCode != 200 && resp.StatusCode != 202 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("seek command failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	return nil
-}
-
-// SetShuffle enables or disables shuffle mode.
-func (c *Controller) SetShuffle(ctx context.Context, state bool, deviceId string) error {
-	query := url.Values{
-		"state": []string{fmt.Sprintf("%t", state)},
-	}
-	if deviceId != "" {
-		query.Set("device_id", deviceId)
-	}
-
-	resp, err := c.sp.WebApiRequest(ctx, "PUT", "/v1/me/player/shuffle", query, nil, nil)
-	if err != nil {
-		return fmt.Errorf("failed sending shuffle command: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != 204 && resp.StatusCode != 200 && resp.StatusCode != 202 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("shuffle command failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	return nil
-}
-
-// SetRepeat sets the repeat mode. Valid values are "off", "context", and "track".
-func (c *Controller) SetRepeat(ctx context.Context, state string, deviceId string) error {
-	query := url.Values{
-		"state": []string{state},
-	}
-	if deviceId != "" {
-		query.Set("device_id", deviceId)
-	}
-
-	resp, err := c.sp.WebApiRequest(ctx, "PUT", "/v1/me/player/repeat", query, nil, nil)
-	if err != nil {
-		return fmt.Errorf("failed sending repeat command: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != 204 && resp.StatusCode != 200 && resp.StatusCode != 202 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("repeat command failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	return nil
-}
-
-// ---------------------------------------------------------------------------
-// Track loading and playback transfer
-// ---------------------------------------------------------------------------
-
-// LoadTrackOptions configures the LoadTrack command.
-type LoadTrackOptions struct {
-	// DeviceId is the target device. If empty, the currently active device is used.
-	DeviceId string
-	// ContextURI is an optional context (album, playlist, artist) URI. If set,
-	// the tracks are played within this context.
-	ContextURI string
-	// OffsetURI is the URI of the track to start playback from within the
-	// context. Only used when ContextURI is set.
-	OffsetURI string
-	// OffsetPosition is the zero-based index within the context to start
-	// playback from. Only used when ContextURI is set and OffsetURI is empty.
-	OffsetPosition *int
-	// PositionMs is the position within the track to start playback from.
-	PositionMs int64
-}
-
-// LoadTrack starts playback of the given track URIs (e.g.
-// "spotify:track:6rqhFgbbKwnb9MLmUQDhG6") on the specified device. If opts
-// is nil, sensible defaults are used.
-func (c *Controller) LoadTrack(ctx context.Context, trackURIs []string, opts *LoadTrackOptions) error {
-	if opts == nil {
-		opts = &LoadTrackOptions{}
-	}
-
-	query := url.Values{}
-	if opts.DeviceId != "" {
-		query.Set("device_id", opts.DeviceId)
-	}
-
-	body := map[string]interface{}{}
-
-	if opts.ContextURI != "" {
-		body["context_uri"] = opts.ContextURI
-	}
-
-	if len(trackURIs) > 0 && opts.ContextURI == "" {
-		body["uris"] = trackURIs
-	}
-
-	if opts.OffsetURI != "" {
-		body["offset"] = map[string]interface{}{"uri": opts.OffsetURI}
-	} else if opts.OffsetPosition != nil {
-		body["offset"] = map[string]interface{}{"position": *opts.OffsetPosition}
-	}
-
-	if opts.PositionMs > 0 {
-		body["position_ms"] = opts.PositionMs
-	}
-
-	bodyBytes, err := json.Marshal(body)
-	if err != nil {
-		return fmt.Errorf("failed marshalling load track body: %w", err)
-	}
-
-	header := http.Header{
-		"Content-Type": []string{"application/json"},
-	}
-
-	resp, err := c.sp.WebApiRequest(ctx, "PUT", "/v1/me/player/play", query, header, bodyBytes)
-	if err != nil {
-		return fmt.Errorf("failed sending load track command: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != 204 && resp.StatusCode != 200 && resp.StatusCode != 202 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("load track command failed with status %d: %s", resp.StatusCode, string(respBody))
-	}
-
-	return nil
-}
-
-// TransferPlayback transfers playback to the specified device. If play is true,
-// playback starts immediately on the target device; otherwise the device becomes
-// active but remains paused.
-func (c *Controller) TransferPlayback(ctx context.Context, deviceId string, play bool) error {
-	body := map[string]interface{}{
-		"device_ids": []string{deviceId},
-		"play":       play,
-	}
-
-	bodyBytes, err := json.Marshal(body)
-	if err != nil {
-		return fmt.Errorf("failed marshalling transfer playback body: %w", err)
-	}
-
-	header := http.Header{
-		"Content-Type": []string{"application/json"},
-	}
-
-	resp, err := c.sp.WebApiRequest(ctx, "PUT", "/v1/me/player", nil, header, bodyBytes)
-	if err != nil {
-		return fmt.Errorf("failed sending transfer playback command: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != 204 && resp.StatusCode != 200 && resp.StatusCode != 202 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("transfer playback command failed with status %d: %s", resp.StatusCode, string(respBody))
-	}
-
-	return nil
-}
-
-// AddToQueue adds a track to the user's playback queue.
-func (c *Controller) AddToQueue(ctx context.Context, trackURI string, deviceId string) error {
-	query := url.Values{
-		"uri": []string{trackURI},
-	}
-	if deviceId != "" {
-		query.Set("device_id", deviceId)
-	}
-
-	resp, err := c.sp.WebApiRequest(ctx, "POST", "/v1/me/player/queue", query, nil, nil)
-	if err != nil {
-		return fmt.Errorf("failed sending add to queue command: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != 204 && resp.StatusCode != 200 && resp.StatusCode != 202 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("add to queue command failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	return nil
-}
-
-// ---------------------------------------------------------------------------
-// Cluster state accessors
-// ---------------------------------------------------------------------------
-
 // Cluster returns the most recently cached connect-state cluster, or nil if
 // no cluster update has been received yet.
 func (c *Controller) Cluster() *connectpb.Cluster {
@@ -842,4 +440,23 @@ func (c *Controller) ActiveDeviceId() string {
 		return ""
 	}
 	return c.cluster.GetActiveDeviceId()
+}
+
+// ---------------------------------------------------------------------------
+// Lifecycle
+// ---------------------------------------------------------------------------
+
+// Close stops the controller's background processing. After Close returns the
+// controller should not be used.
+func (c *Controller) Close() {
+	c.once.Do(func() {
+		close(c.stopCh)
+
+		// Stop any pending volume debounce timer.
+		c.volumeMu.Lock()
+		if c.volumeTimer != nil {
+			c.volumeTimer.Stop()
+		}
+		c.volumeMu.Unlock()
+	})
 }

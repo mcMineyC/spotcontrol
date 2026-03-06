@@ -2,7 +2,10 @@ package spclient
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -18,6 +21,137 @@ import (
 	spotcontrol "github.com/badfortrains/spotcontrol"
 	connectpb "github.com/badfortrains/spotcontrol/proto/spotify/connectstate"
 )
+
+// ---------------------------------------------------------------------------
+// Connect-state player command types
+// ---------------------------------------------------------------------------
+
+// CommandLoggingParams mirrors the logging_params object sent with
+// connect-state player commands. All fields are optional.
+type CommandLoggingParams struct {
+	CommandInitiatedTime *int64   `json:"command_initiated_time,omitempty"`
+	CommandReceivedTime  *int64   `json:"command_received_time,omitempty"`
+	PageInstanceIds      []string `json:"page_instance_ids"`
+	InteractionIds       []string `json:"interaction_ids"`
+	DeviceIdentifier     string   `json:"device_identifier,omitempty"`
+	CommandId            string   `json:"command_id,omitempty"`
+}
+
+// CommandSkipTo specifies which track to skip to within a play command.
+type CommandSkipTo struct {
+	TrackUid   string `json:"track_uid,omitempty"`
+	TrackUri   string `json:"track_uri,omitempty"`
+	TrackIndex int    `json:"track_index,omitempty"`
+}
+
+// CommandOptions contains options sent with connect-state player commands.
+// The Spotify desktop client sends these with every command.
+type CommandOptions struct {
+	RestorePaused        string         `json:"restore_paused,omitempty"`
+	RestorePosition      string         `json:"restore_position,omitempty"`
+	RestoreTrack         string         `json:"restore_track,omitempty"`
+	AllowSeeking         bool           `json:"allow_seeking,omitempty"`
+	OverrideRestrictions bool           `json:"override_restrictions"`
+	OnlyForLocalDevice   bool           `json:"only_for_local_device"`
+	SystemInitiated      bool           `json:"system_initiated"`
+	SkipTo               *CommandSkipTo `json:"skip_to,omitempty"`
+}
+
+// ResumeOrigin is sent with "resume" commands by the Spotify desktop client.
+type ResumeOrigin struct {
+	FeatureIdentifier string `json:"feature_identifier,omitempty"`
+}
+
+// PlayerCommand is the command object nested inside a PlayerCommandRequest.
+// It mirrors the dealer request command format used by librespot and the
+// Spotify desktop client for remote device control.
+//
+// Endpoint path:
+//
+//	POST /connect-state/v1/player/command/from/{fromDevice}/to/{toDevice}
+type PlayerCommand struct {
+	// Endpoint is the command type: "resume", "pause", "skip_next",
+	// "skip_prev", "seek_to", "set_shuffling_context",
+	// "set_repeating_context", "set_repeating_track", "add_to_queue", etc.
+	Endpoint string `json:"endpoint"`
+
+	// Value is used by commands like seek_to (int), set_shuffling_context
+	// (bool), set_repeating_context (bool), set_repeating_track (bool).
+	Value interface{} `json:"value,omitempty"`
+
+	// Position is used by seek_to for relative seeking.
+	Position *int64 `json:"position,omitempty"`
+
+	// Relative is used by seek_to: "beginning" or "current".
+	Relative string `json:"relative,omitempty"`
+
+	// Context is used by the "play" endpoint.
+	Context *connectpb.Context `json:"context,omitempty"`
+
+	// PlayOrigin is used by the "play" endpoint.
+	PlayOrigin *connectpb.PlayOrigin `json:"play_origin,omitempty"`
+
+	// Track is used by "skip_next" and "add_to_queue".
+	Track *connectpb.ContextTrack `json:"track,omitempty"`
+
+	// PrevTracks is used by "set_queue".
+	PrevTracks []*connectpb.ContextTrack `json:"prev_tracks,omitempty"`
+
+	// NextTracks is used by "set_queue".
+	NextTracks []*connectpb.ContextTrack `json:"next_tracks,omitempty"`
+
+	// Options carries additional command options.
+	Options *CommandOptions `json:"options,omitempty"`
+
+	// LoggingParams carries logging/telemetry metadata.
+	LoggingParams *CommandLoggingParams `json:"logging_params,omitempty"`
+
+	// ResumeOrigin is sent with "resume" commands.
+	ResumeOrigin *ResumeOrigin `json:"resume_origin,omitempty"`
+}
+
+// PlayerCommandRequest is the top-level JSON envelope sent to the
+// connect-state player command endpoint. This matches the format observed
+// from the Spotify desktop client:
+//
+//	{
+//	  "command": { "endpoint": "resume", ... },
+//	  "connection_type": "wlan",
+//	  "intent_id": "<hex>"
+//	}
+//
+// Note: the desktop client does NOT include message_id or sent_by_device_id
+// at the top level. Those are part of the dealer WebSocket request format
+// (used when commands are received), not when sending via the REST endpoint.
+type PlayerCommandRequest struct {
+	Command        *PlayerCommand `json:"command"`
+	ConnectionType string         `json:"connection_type,omitempty"`
+	IntentId       string         `json:"intent_id,omitempty"`
+}
+
+// RandomHex returns a random hex string of the given byte length (output is 2*n chars).
+func RandomHex(n int) string {
+	b := make([]byte, n)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+// TransferOptions mirrors librespot's TransferOptions struct used in the
+// connect-state transfer endpoint body. All fields are optional string
+// pointers matching the Rust serde serialization (skip_serializing_if =
+// "Option::is_none").
+type TransferOptions struct {
+	RestorePaused   *string `json:"restore_paused,omitempty"`
+	RestorePosition *string `json:"restore_position,omitempty"`
+	RestoreTrack    *string `json:"restore_track,omitempty"`
+	RetainSession   *string `json:"retain_session,omitempty"`
+}
+
+// TransferRequest is the JSON body POSTed to the connect-state transfer
+// endpoint. It mirrors librespot's TransferRequest struct (see spclient.rs).
+type TransferRequest struct {
+	TransferOptions TransferOptions `json:"transfer_options"`
+}
 
 // Spclient is an HTTP client wrapper for Spotify's spclient API. It
 // automatically injects bearer tokens (from Login5) and the client token into
@@ -384,4 +518,164 @@ func (c *Spclient) PutConnectState(ctx context.Context, spotConnId string, reqPr
 // DeviceId returns the device ID this Spclient was created with.
 func (c *Spclient) DeviceId() string {
 	return c.deviceId
+}
+
+// ConnectPlayerCommand sends a playback command to a remote device through the
+// connect-state player command endpoint. This is the same mechanism used by the
+// Spotify desktop client to control remote devices.
+//
+// The endpoint is:
+//
+//	POST /connect-state/v1/player/command/from/{fromDevice}/to/{toDevice}
+//
+// The body is a gzip-compressed JSON-encoded PlayerCommandRequest. The format
+// was determined by capturing traffic from the Spotify desktop client:
+//
+//	{
+//	  "command": {"endpoint": "resume", "options": {...}, "logging_params": {...}},
+//	  "connection_type": "wlan",
+//	  "intent_id": "<random hex>"
+//	}
+func (c *Spclient) ConnectPlayerCommand(
+	ctx context.Context,
+	spotConnId string,
+	targetDeviceId string,
+	cmdReq *PlayerCommandRequest,
+) error {
+	jsonBody, err := json.Marshal(cmdReq)
+	if err != nil {
+		return fmt.Errorf("failed marshalling player command request: %w", err)
+	}
+
+	// Gzip-compress the JSON body, matching the desktop client behavior.
+	var buf bytes.Buffer
+	gw := gzip.NewWriter(&buf)
+	if _, err := gw.Write(jsonBody); err != nil {
+		return fmt.Errorf("failed gzip compressing player command: %w", err)
+	}
+	if err := gw.Close(); err != nil {
+		return fmt.Errorf("failed closing gzip writer: %w", err)
+	}
+
+	path := fmt.Sprintf(
+		"/connect-state/v1/player/command/from/%s/to/%s",
+		c.deviceId, targetDeviceId,
+	)
+
+	resp, err := c.Request(ctx, "POST", path, nil, http.Header{
+		"X-Spotify-Connection-Id": []string{spotConnId},
+		"Content-Type":            []string{"application/json"},
+		"Content-Encoding":        []string{"gzip"},
+	}, buf.Bytes())
+	if err != nil {
+		return fmt.Errorf("failed sending connect player command: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	switch resp.StatusCode {
+	case 200, 202, 204:
+		return nil
+	default:
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("connect player command (%s) failed with status %d: %s",
+			cmdReq.Command.Endpoint, resp.StatusCode, string(respBody))
+	}
+}
+
+// ConnectTransfer triggers a playback transfer through the connect-state
+// transfer endpoint. This is the same endpoint librespot uses (see
+// spclient.rs transfer()).
+//
+// Using the same device ID for both from and to initiates the transfer from
+// the currently active device to this device.
+//
+// The transferReq parameter mirrors librespot's TransferRequest struct. Pass
+// nil to send an empty POST (no body). The endpoint path is:
+//
+//	POST /connect-state/v1/connect/transfer/from/{fromDeviceId}/to/{toDeviceId}
+func (c *Spclient) ConnectTransfer(
+	ctx context.Context,
+	spotConnId string,
+	fromDeviceId string,
+	toDeviceId string,
+	transferReq *TransferRequest,
+) error {
+	path := fmt.Sprintf(
+		"/connect-state/v1/connect/transfer/from/%s/to/%s",
+		fromDeviceId, toDeviceId,
+	)
+
+	var body []byte
+	if transferReq != nil {
+		var err error
+		body, err = json.Marshal(transferReq)
+		if err != nil {
+			return fmt.Errorf("failed marshalling transfer request: %w", err)
+		}
+	}
+
+	header := http.Header{
+		"X-Spotify-Connection-Id": []string{spotConnId},
+	}
+	if body != nil {
+		header.Set("Content-Type", "application/json")
+	}
+
+	resp, err := c.Request(ctx, "POST", path, nil, header, body)
+	if err != nil {
+		return fmt.Errorf("failed sending connect transfer: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	switch resp.StatusCode {
+	case 200, 202, 204:
+		return nil
+	default:
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("connect transfer failed with status %d: %s",
+			resp.StatusCode, string(respBody))
+	}
+}
+
+// ConnectSetVolume sends a volume change through the connect-state volume
+// endpoint. This is the dedicated volume signaling path used by librespot
+// (see SetVolumeCommand handling in spirc.rs) and is separate from the
+// general player command endpoint.
+func (c *Spclient) ConnectSetVolume(
+	ctx context.Context,
+	spotConnId string,
+	targetDeviceId string,
+	volume int32,
+) error {
+	volumeCmd := &connectpb.SetVolumeCommand{
+		Volume: volume,
+	}
+
+	body, err := proto.Marshal(volumeCmd)
+	if err != nil {
+		return fmt.Errorf("failed marshalling SetVolumeCommand: %w", err)
+	}
+
+	path := fmt.Sprintf(
+		"/connect-state/v1/connect/volume/from/%s/to/%s",
+		c.deviceId, targetDeviceId,
+	)
+
+	resp, err := c.Request(ctx, "PUT", path, nil, http.Header{
+		"X-Spotify-Connection-Id": []string{spotConnId},
+		"Content-Type":            []string{"application/x-protobuf"},
+	}, body)
+	if err != nil {
+		return fmt.Errorf("failed sending connect volume: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	switch resp.StatusCode {
+	case 200, 202, 204:
+		return nil
+	default:
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("connect volume command failed with status %d: %s",
+			resp.StatusCode, string(respBody))
+	}
 }
